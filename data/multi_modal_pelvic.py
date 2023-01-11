@@ -160,7 +160,7 @@ class MultiModalPelvicDataModule(LightningDataModule):
             split,
             base_dir=self.data_dir
         ) for datalist_json in self.datalist_jsons]
-        test_datasets = [data.Dataset(data=datalist, transform=self.train_transforms) for datalist in datalists]  # TODO: Change transform here
+        test_datasets = [data.Dataset(data=datalist, transform=self.val_transforms) for datalist in datalists]
         return ConcatDataset(test_datasets)
 
     def train_dataloader(self):
