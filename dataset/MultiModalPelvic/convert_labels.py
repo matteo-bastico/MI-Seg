@@ -30,7 +30,8 @@ if __name__ == '__main__':
                     # Loading the 3D Mask from within the RT Struct
                     mask_3d = np.zeros(rtstruct.get_roi_mask_by_name('External').shape)
                     for key in _LABEL_CODE:
-                        mask_3d += _LABEL_CODE[key] * rtstruct.get_roi_mask_by_name(key)
+                        if key in rtstruct.get_roi_names():
+                            mask_3d += _LABEL_CODE[key] * rtstruct.get_roi_mask_by_name(key)
                     reader = sitk.ImageSeriesReader()
                     dicom_names = reader.GetGDCMSeriesFileNames(path + patient_folder + "/T2")
                     reader.SetFileNames(dicom_names)
