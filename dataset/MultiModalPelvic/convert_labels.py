@@ -1,4 +1,5 @@
 import os
+import warnings
 import numpy as np
 import SimpleITK as sitk
 
@@ -19,21 +20,24 @@ if __name__ == '__main__':
     args = parser.parse_args()
     path = args.data_path
     for patient_folder in os.listdir(path):
-        # TODO: change + with os.path.join
-        for file in os.listdir(path + patient_folder):
-            if os.path.isfile(path + patient_folder + '/' + file):
+        for file in os.listdir(os.path.join(path, patient_folder)):
+            if os.path.isfile(os.path.join(path, patient_folder, file)):
                 try:
                     rtstruct = RTStructBuilder.create_from(
-                        dicom_series_path=path + patient_folder + "/T2",
-                        rt_struct_path=path + patient_folder + '/' + file
+                        dicom_series_path=os.path.join(path, patient_folder, 'T2'),
+                        rt_struct_path=os.path.join(path, patient_folder, file)
                     )
                     # Loading the 3D Mask from within the RT Struct
                     mask_3d = np.zeros(rtstruct.get_roi_mask_by_name('External').shape)
                     for key in _LABEL_CODE:
                         if key in rtstruct.get_roi_names():
-                            mask_3d += _LABEL_CODE[key] * rtstruct.get_roi_mask_by_name(key)
+                            # Here we avoid also overlapping labels, it can happen with prostate and rectum
+                            # a small overlap in some samples
+                            mask_3d[mask_3d == 0] += _LABEL_CODE[key] * rtstruct.get_roi_mask_by_name(key)[mask_3d == 0]
+                        else:
+                            warnings.warn("Skipping label {} not found in {}.".format(key, patient_folder))
                     reader = sitk.ImageSeriesReader()
-                    dicom_names = reader.GetGDCMSeriesFileNames(path + patient_folder + "/T2")
+                    dicom_names = reader.GetGDCMSeriesFileNames(os.path.join(path, patient_folder, 'T2'))
                     reader.SetFileNames(dicom_names)
                     image = reader.Execute()
                     label = sitk.GetImageFromArray((mask_3d.swapaxes(0, 2)).swapaxes(1, 2))
@@ -42,6 +46,7 @@ if __name__ == '__main__':
                     print(patient_folder)
                     print("Image size:", image.GetSize())
                     print("Label size:", label.GetSize())
-                    sitk.WriteImage(label, path + patient_folder + '/labels.nii.gz')
+                    sitk.WriteImage(label, os.path.join(path, patient_folder, 'labels.nii.gz'))
                 except:
+                    # Probably file is not an RT_struct
                     pass

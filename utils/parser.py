@@ -26,10 +26,10 @@ def add_model_argparse_args(parser: ArgumentParser):
                         help="bias term for the qkv linear layer in self attention block")
     group.add_argument("--vit_norm_name", type=str, default="layer", help="Normalization type in ViT blocks")
     group.add_argument("--vit_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
-    group.add_argument("--encoder_norm_name", type=str, default="instance_cond",
+    group.add_argument("--encoder_norm_name", type=str, default="instance",
                         help="Normalization type in encoder blocks")
     group.add_argument("--encoder_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
-    group.add_argument("--decoder_norm_name", type=str, default="group",
+    group.add_argument("--decoder_norm_name", type=str, default="instance",
                         help="Normalization type in decoder blocks")
     group.add_argument("--decoder_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
     group.add_argument("--num_groups", type=int, default=4, help="For group norm")
@@ -72,13 +72,14 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--group", type=str, help="wandb group")
     group.add_argument("--project", type=str, help="wandb project")
     group.add_argument("--entity", type=str, help="wandb entity")
+    group.add_argument("--wandb_mode", type=str, default='online', help="Mode for wandb logger")
     return parser
 
 
 def add_data_argparse_args(parser: ArgumentParser):
     group = parser.add_argument_group("dataset(s)")
     group.add_argument("--data_dir", default="dataset/MultiModalPelvic", type=str, help="dataset directory")
-    group.add_argument('--json_lists',default=['CT.json', 'MR.json'], nargs='+',
+    group.add_argument('--json_lists', default=['CT.json', 'MR.json'], nargs='+',
                         help='Json list(s) of input dataset(s)', type=str)
     group.add_argument("--space_x", default=1.0, type=float, help="spacing in x direction")
     group.add_argument("--space_y", default=1.0, type=float, help="spacing in y direction")

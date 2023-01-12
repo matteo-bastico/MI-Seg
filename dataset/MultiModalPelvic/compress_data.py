@@ -10,13 +10,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     path = args.data_path
     for patient_folder in os.listdir(path):
-        # TODO: change + with os.path.join
         reader = sitk.ImageSeriesReader()
-        dicom_names = reader.GetGDCMSeriesFileNames(path + patient_folder + "/T2")
+        dicom_names = reader.GetGDCMSeriesFileNames(os.path.join(path, patient_folder, 'T2'))
         reader.SetFileNames(dicom_names)
         image_t2 = reader.Execute()
         reader = sitk.ImageSeriesReader()
-        dicom_names = reader.GetGDCMSeriesFileNames(path + patient_folder + "/Deformed_CT")
+        dicom_names = reader.GetGDCMSeriesFileNames(os.path.join(path, patient_folder, 'Deformed_CT'))
         reader.SetFileNames(dicom_names)
         image_ct = reader.Execute()
         if image_t2.GetSpacing() != image_ct.GetSpacing():
@@ -28,5 +27,5 @@ if __name__ == '__main__':
             ))
             # Set CT spacing as T2, to avoid problems in training for label spacing
             image_ct.SetSpacing(image_t2.GetSpacing())
-        sitk.WriteImage(image_ct, path + patient_folder + '/Deformed_CT.nii.gz')
-        sitk.WriteImage(image_t2, path + patient_folder + '/T2.nii.gz')
+        sitk.WriteImage(image_ct, os.path.join(path, patient_folder, '/Deformed_CT.nii.gz'))
+        sitk.WriteImage(image_t2, os.path.join(path, patient_folder, '/T2.nii.gz'))

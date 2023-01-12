@@ -19,6 +19,7 @@ def main(args):
         project=args.project if args.project else None,
         entity=args.entity if args.entity else None,
         log_model=True,  # Log model checkpoints at the end of training
+        mode=args.wandb_mode
     )
     early_stop_callback = EarlyStopping(
         monitor="val/avg_accuracy",
@@ -47,7 +48,7 @@ def main(args):
             lr_monitor_callback,
             checkpoint_callback
         ],
-        logger=wandb_logger,
+        logger=wandb_logger
     )
     trainer.fit(
         lit_model,

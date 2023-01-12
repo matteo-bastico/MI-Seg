@@ -1,5 +1,4 @@
 import os
-import warnings
 import SimpleITK as sitk
 
 from argparse import ArgumentParser
@@ -14,8 +13,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     path = args.data_path
     for patient_folder in os.listdir(path):
-        # TODO: change + with os.path.join
-        inputImage = sitk.ReadImage(path + patient_folder + "/T2.nii.gz", sitk.sitkFloat32)
+        inputImage = sitk.ReadImage(os.path.join(path, patient_folder, "T2.nii.gz"), sitk.sitkFloat32)
         image = inputImage
         if args.mask_image:
             maskImage = sitk.ReadImage(args.mask_image, sitk.sitkUInt8)
@@ -36,5 +34,5 @@ if __name__ == '__main__':
         corrected_image = corrector.Execute(image, maskImage)
         log_bias_field = corrector.GetLogBiasFieldAsImage(inputImage)
         corrected_image_full_resolution = inputImage / sitk.Exp(log_bias_field)
-        sitk.WriteImage(corrected_image_full_resolution, path + patient_folder + '/T2_N4.nii.gz')
+        sitk.WriteImage(corrected_image_full_resolution, os.path.join(path, patient_folder, 'T2_N4.nii.gz'))
         print(patient_folder, " Conversion completed.")

@@ -1,0 +1,98 @@
+{
+  "description": "CT-ORG: CT volume with bones only segmentations",
+  "labels": {
+    "0": "background",
+    "1": "bone"
+  },
+  "licence": "yt",
+  "modality": 0,
+  "name": "CT-ORG",
+  "numTest": 21,
+  "numTraining": 119,
+  "numValidation": 0,
+  "reference": "Biomet, Inc.",
+  "release": "N/A",
+  "tensorImageSize": "3D",
+  "test": [
+    {
+      "image": "data/1_06_P/Deformed_CT.nii.gz",
+      "label": "data/1_06_P/labels.nii.gz"
+    },
+    {
+      "image": "data/2_05_P/Deformed_CT.nii.gz",
+      "label": "data/2_05_P/labels.nii.gz"
+    }
+  ],
+  "training": [
+    {
+      "image": "data/2_06_P/Deformed_CT.nii.gz",
+      "label": "data/2_06_P/labels.nii.gz"
+    },
+    {
+      "image": "data/2_04_P/Deformed_CT.nii.gz",
+      "label": "data/2_04_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_08_P/Deformed_CT.nii.gz",
+      "label": "data/1_08_P/labels.nii.gz"
+    },
+    {
+      "image": "data/2_09_P/Deformed_CT.nii.gz",
+      "label": "data/2_09_P/labels.nii.gz"
+    },
+    {
+      "image": "data/2_10_P/Deformed_CT.nii.gz",
+      "label": "data/2_10_P/labels.nii.gz"
+    },
+    {
+      "image": "data/3_02_P/Deformed_CT.nii.gz",
+      "label": "data/3_02_P/labels.nii.gz"
+    },
+    {
+      "image": "data/3_01_P/Deformed_CT.nii.gz",
+      "label": "data/3_01_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_05_P/Deformed_CT.nii.gz",
+      "label": "data/1_05_P/labels.nii.gz"
+    },
+    {
+      "image": "data/2_03_P/Deformed_CT.nii.gz",
+      "label": "data/2_03_P/labels.nii.gz"
+    },
+    {
+      "image": "data/2_11_P/Deformed_CT.nii.gz",
+      "label": "data/2_11_P/labels.nii.gz"
+    },
+    {
+      "image": "data/3_04_P/Deformed_CT.nii.gz",
+      "label": "data/3_04_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_04_P/Deformed_CT.nii.gz",
+      "label": "data/1_04_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_02_P/Deformed_CT.nii.gz",
+      "label": "data/1_02_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_01_P/Deformed_CT.nii.gz",
+      "label": "data/1_01_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_07_P/Deformed_CT.nii.gz",
+      "label": "data/1_07_P/labels.nii.gz"
+    }
+  ],
+  "validation": [
+    {
+      "image": "data/1_03_P/Deformed_CT.nii.gz",
+      "label": "data/1_03_P/labels.nii.gz"
+    },
+    {
+      "image": "data/3_03_P/Deformed_CT.nii.gz",
+      "label": "data/3_03_P/labels.nii.gz"
+    }
+  ]
+}

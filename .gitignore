@@ -133,3 +133,5 @@ dmypy.json
 
 #data
 /dataset/MultiModalPelvic/data/**
+/wandb/
+/dataset/MultiModalPelvic/notebooks/

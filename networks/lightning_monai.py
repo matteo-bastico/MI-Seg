@@ -207,10 +207,12 @@ class LitMonai(LightningModule):
             loss_per_modality[f"{prefix}/modality{int(modality)}_loss"] = \
                 np.nanmean(validation_outputs['loss'][validation_outputs['modality'] == modality])
         self.log_dict(accuracy_per_modality,
-                      logger=True
+                      logger=True,
+                      sync_dist=True
                       )
         self.log_dict(loss_per_modality,
-                      logger=True
+                      logger=True,
+                      sync_dist=True
                       )
 
     '''

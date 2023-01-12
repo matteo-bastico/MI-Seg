@@ -17,37 +17,36 @@ if __name__ == '__main__':
         dcm_deformed_CT = []
         dcm_reg = []
         dcm_rs = []
-        # TODO: change + with os.path.join
-        if not os.path.exists(path + patient_folder + '/T1'):
-            os.mkdir(path + patient_folder + '/T1')
-        if not os.path.exists(path + patient_folder + '/T2'):
-            os.mkdir(path + patient_folder + '/T2')
-        if not os.path.exists(path + patient_folder + '/CT'):
-            os.mkdir(path + patient_folder + '/CT')
-        if not os.path.exists(path + patient_folder + '/Deformed_CT'):
-            os.mkdir(path + patient_folder + '/Deformed_CT')
-        for file_name in sorted(os.listdir(path + patient_folder)):
+        if not os.path.exists(os.path.join(path, patient_folder, 'T1')):
+            os.mkdir(os.path.join(path, patient_folder, 'T1'))
+        if not os.path.exists(os.path.join(path, patient_folder, 'T2')):
+            os.mkdir(os.path.join(path, patient_folder, 'T2'))
+        if not os.path.exists(os.path.join(path, patient_folder, 'CT')):
+            os.mkdir(os.path.join(path, patient_folder, 'CT'))
+        if not os.path.exists(os.path.join(path, patient_folder, 'Deformed_CT')):
+            os.mkdir(os.path.join(path, patient_folder, 'Deformed_CT'))
+        for file_name in sorted(os.listdir(os.path.join(path, patient_folder))):
             if os.path.isfile(os.path.join(path, patient_folder, file_name)) and 'labels' not in file_name:
                 dcm = pydicom.read_file(os.path.join(path, patient_folder, file_name))
                 if 'MR' in file_name:
                     if 'T1' in dcm['SeriesDescription'].value.upper():
                         shutil.move(os.path.join(path, patient_folder, file_name),
-                                    path + patient_folder + '/T1/' + file_name)
+                                    os.path.join(path, patient_folder, 'T1', file_name))
                         dcm_T1.append(dcm)
                     elif 'T2' in dcm['SeriesDescription'].value.upper():
                         shutil.move(os.path.join(path, patient_folder, file_name),
-                                    path + patient_folder + '/T2/' + file_name)
+                                    os.path.join(path, patient_folder, 'T2', file_name))
                         dcm_T2.append(dcm)
                     else:
                         warnings.warn("Found an MRI dcm that is neither T1 nor T2, it has been skipped.")
                 elif 'CT' in file_name:
                     if 'Deformed' in dcm['SeriesDescription'].value:
                         shutil.move(os.path.join(path, patient_folder, file_name),
-                                    path + patient_folder + '/Deformed_CT/' + file_name)
+                                    os.path.join(path, patient_folder, 'Deformed_CT', file_name))
                         dcm_deformed_CT.append(dcm)
                     else:
                         shutil.move(os.path.join(path, patient_folder, file_name),
-                                    path + patient_folder + '/CT/' + file_name)
+                                    os.path.join(path, patient_folder, 'CT', file_name))
                         dcm_CT.append(dcm)
                 elif 'REG' in file_name:
                     # Deformable registration details as elastix parameter file
