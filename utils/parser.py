@@ -73,6 +73,8 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--project", type=str, help="wandb project")
     group.add_argument("--entity", type=str, help="wandb entity")
     group.add_argument("--wandb_mode", type=str, default='online', help="Mode for wandb logger")
+    group.add_argument("--wandb_dir", type=str, help="An absolute path to a directory where metadata will be stored."
+                                                     "By default, this is the ./wandb directory.")
     return parser
 
 

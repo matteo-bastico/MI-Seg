@@ -19,7 +19,8 @@ def main(args):
         project=args.project if args.project else None,
         entity=args.entity if args.entity else None,
         log_model=True,  # Log model checkpoints at the end of training
-        mode=args.wandb_mode
+        mode=args.wandb_mode,
+        dir=args.wandb_dir
     )
     early_stop_callback = EarlyStopping(
         monitor="val/avg_accuracy",
