@@ -22,7 +22,7 @@ def main(args):
         hyper_parameters['roi_z'],
     )
     with torch.no_grad():
-        pred = model(x, modalities=1)
+        pred = model(x, modalities=torch.tensor([0]))
     print(pred)
 
 

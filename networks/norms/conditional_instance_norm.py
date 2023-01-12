@@ -32,7 +32,7 @@ class ConditionalInstanceNorm1D(nn.Module):
         ])
 
     def forward(self, x, style_ids):
-        if isinstance(style_ids, list):
+        if isinstance(style_ids, (list, torch.Tensor)):
             out = torch.stack([self.norms[style_ids[i]](x[i].unsqueeze(0)).squeeze(0) for i in range(len(style_ids))])
         else:
             out = self.norms[style_ids]((x.unsqueeze(0)).squeeze(0))
@@ -66,7 +66,7 @@ class ConditionalInstanceNorm2D(nn.Module):
         ])
 
     def forward(self, x, style_ids):
-        if isinstance(style_ids, list):
+        if isinstance(style_ids, (list, torch.Tensor)):
             out = torch.stack([self.norms[style_ids[i]](x[i].unsqueeze(0)).squeeze(0) for i in range(len(style_ids))])
         else:
             out = self.norms[style_ids]((x.unsqueeze(0)).squeeze(0))
@@ -100,7 +100,7 @@ class ConditionalInstanceNorm3D(nn.Module):
         ])
 
     def forward(self, x, style_ids: Union[List, int]):
-        if isinstance(style_ids, list):
+        if isinstance(style_ids, (list, torch.Tensor)):
             out = torch.stack([self.norms[style_ids[i]](x[i].unsqueeze(0)).squeeze(0) for i in range(len(style_ids))])
         else:
             out = self.norms[style_ids]((x.unsqueeze(0)).squeeze(0))
