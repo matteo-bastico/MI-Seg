@@ -169,7 +169,7 @@ class MultiModalPelvicDataModule(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
             shuffle=True
         )
 
@@ -179,7 +179,7 @@ class MultiModalPelvicDataModule(LightningDataModule):
             batch_size=1,
             num_workers=self.num_workers,
             pin_memory=True,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
         )
 
     def test_dataloader(self):
@@ -188,7 +188,7 @@ class MultiModalPelvicDataModule(LightningDataModule):
             batch_size=1,
             num_workers=self.num_workers,
             pin_memory=True,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
         )
 
     def predict_dataloader(self):
@@ -197,5 +197,5 @@ class MultiModalPelvicDataModule(LightningDataModule):
             batch_size=1,
             num_workers=self.num_workers,
             pin_memory=True,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
         )
