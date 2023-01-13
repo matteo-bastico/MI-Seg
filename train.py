@@ -26,29 +26,6 @@ def main(args):
         mode=args.wandb_mode,
         save_dir=args.default_root_dir,
     )
-    if args.auto_lr_find:
-        # It is not supported in ddp, do on single node and then start other trainer with new lr
-        # Suggestion: do with accelerator 'gpu'
-        if args.devices is None or int(args.devices) > 1:
-            warnings.warn("Provided devices > 1 or auto. If several devices are available, "
-                          "the best learning rate will be calculated on single device. "
-                          "Pytorch Lightning does not support learning rate tuning in ddp.")
-        if args.accelerator == 'cpu':
-            devices = 'auto'
-        else:
-            devices = [0]
-        trainer = Trainer.from_argparse_args(args, devices=devices, logger=False)
-        lr_finder = trainer.tuner.lr_find(lit_model, lit_data)
-        fig = lr_finder.plot(suggest=True)
-        new_lr = lr_finder.suggestion()
-        print("Best learning rate found for this trial with tuner: ", new_lr)
-        lit_model.hparams.learning_rate = new_lr
-        Path(os.path.join(trainer.default_root_dir, args.project, 'lr_finder')).mkdir(exist_ok=True, parents=True)
-        plt.savefig(os.path.join(trainer.default_root_dir, args.project, 'lr_finder',
-                                 wandb_logger.experiment.id + '.pdf'))
-        args.lr = new_lr
-        args.auto_lr_find = None
-
     early_stop_callback = EarlyStopping(
         monitor="val/accuracy/avg",
         min_delta=args.min_delta,
@@ -80,7 +57,10 @@ def main(args):
         logger=wandb_logger
     )
     # Not supported in ddp
-    # trainer.tune(lit_model, lit_data, lr_find_kwargs={'num_training': 10})
+    try:
+        trainer.tune(lit_model, lit_data)
+    except Exception as e:
+        warnings.warn("Tuning skipped due to Exception: {}".format(e))
     trainer.fit(
         lit_model,
         lit_data,
