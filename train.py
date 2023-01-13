@@ -1,5 +1,8 @@
 import wandb
+import os.path
+import matplotlib.pyplot as plt
 
+from pathlib import Path
 from argparse import ArgumentParser
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
@@ -18,12 +21,11 @@ def main(args):
         group=args.group if args.group else None,
         project=args.project if args.project else None,
         entity=args.entity if args.entity else None,
-        log_model=True,  # Log model checkpoints at the end of training
-        mode=args.wandb_mode,
-        dir=args.wandb_dir
+        log_model=False,  # Do not log the models online, too heavy
+        mode=args.wandb_mode
     )
     early_stop_callback = EarlyStopping(
-        monitor="val/avg_accuracy",
+        monitor="val/accuracy/avg",
         min_delta=args.min_delta,
         patience=args.patience,
         verbose=True,
@@ -34,7 +36,7 @@ def main(args):
         log_momentum=False
     )
     checkpoint_callback = ModelCheckpoint(
-        monitor='val/avg_accuracy',  # Quantity to monitor.
+        monitor='val/accuracy/avg',  # Quantity to monitor.
         mode='max',
         verbose=True,
         save_last=True,  # Saves a copy of the checkpoint to a file last.ckpt whenever a checkpoint file gets saved.
@@ -51,6 +53,14 @@ def main(args):
         ],
         logger=wandb_logger
     )
+    if args.auto_lr_find:
+        lr_finder = trainer.tuner.lr_find(lit_model, lit_data)
+        fig = lr_finder.plot(suggest=True)
+        new_lr = lr_finder.suggestion()
+        print("Best learning rate found for this trial with tuner: ", new_lr)
+        lit_model.hparams.learning_rate = new_lr
+        Path(os.path.join(args.project, 'lr_finder')).mkdir(exist_ok=True, parents=True)
+        plt.savefig(os.path.join(args.project, 'lr_finder', wandb_logger.experiment.id + '.pdf'))
     trainer.fit(
         lit_model,
         lit_data,

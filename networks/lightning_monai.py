@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from functools import partial
 from typing import Union, Sequence
-from monai.losses import DiceCELoss
+from monai.losses import DiceCELoss, DiceFocalLoss
 from monai.metrics import DiceMetric
 from monai.data import decollate_batch
 from monai.transforms import AsDiscrete
@@ -20,6 +20,7 @@ class LitMonai(LightningModule):
     def __init__(self,
                  model: nn.Module,
                  out_channels: int,
+                 criterion: str = "dice_focal",
                  squared_pred: bool = True,
                  smooth_nr: float = 0.0,
                  smooth_dr: float = 1e-6,
@@ -32,19 +33,33 @@ class LitMonai(LightningModule):
                  sw_batch_size: int = 1,
                  infer_cpu: bool = False,
                  batch_size: int = 1,
+                 scheduler: str = 'reduce_on_plateau',
                  warmup_epochs: Union[int, None] = None,
+                 patience: Union[int, None] = None,
+                 check_val_every_n_epoch: Union[int, None] = None,
                  max_epochs: int = 5000,
                  **kwargs
                  ):
         super().__init__()
         self.model = model
-        self.criterion = DiceCELoss(
-            to_onehot_y=True,
-            softmax=True,
-            squared_pred=squared_pred,
-            smooth_nr=smooth_nr,
-            smooth_dr=smooth_dr
-        )
+        if criterion == "dice_focal":
+            self.criterion = DiceFocalLoss(
+                to_onehot_y=True,
+                softmax=True,
+                squared_pred=True,
+                smooth_nr=smooth_nr,
+                smooth_dr=smooth_dr
+            )
+        elif criterion == "dice_ce":
+            self.criterion = DiceCELoss(
+                to_onehot_y=True,
+                softmax=True,
+                squared_pred=squared_pred,
+                smooth_nr=smooth_nr,
+                smooth_dr=smooth_dr
+            )
+        else:
+            raise ValueError("Criterion {} not implemented, please chose another optimizer.".format(criterion))
         self.post_label = AsDiscrete(
             to_onehot=out_channels
         )
@@ -71,9 +86,12 @@ class LitMonai(LightningModule):
             sw_batch_size=sw_batch_size,
             device=torch.device("cpu") if infer_cpu else None
         )
+        self.scheduler = scheduler
         self.warmup_epochs = warmup_epochs
+        self.patience = patience
+        self.check_val_every_n_epoch = check_val_every_n_epoch
         self.max_epochs = max_epochs
-        # For hyper-parameters saving, additional args to log, can be useful to load from checkpoint
+        # For hyperparameters saving, additional args to log, can be useful to load from checkpoint
         self.__dict__.update(kwargs)
         self.save_hyperparameters(ignore=[
             'model',
@@ -95,6 +113,7 @@ class LitMonai(LightningModule):
         return cls(
             model=model,
             out_channels=args.out_channels,
+            criterion=args.criterion,
             squared_pred=args.squared_dice,
             smooth_nr=args.smooth_nr,
             smooth_dr=args.smooth_dr,
@@ -106,7 +125,10 @@ class LitMonai(LightningModule):
             sw_batch_size=args.sw_batch_size,
             infer_cpu=args.infer_cpu,
             batch_size=args.batch_size,
+            scheduler=args.scheduler,
             warmup_epochs=args.warmup_epochs,
+            patience=args.patience / 2,
+            check_val_every_n_epoch=args.check_val_every_n_epoch,
             max_epochs=args.max_epochs,
             **additional_kwargs
         )
@@ -124,7 +146,7 @@ class LitMonai(LightningModule):
         loss = self.criterion(logits, label)
         self.log("train/loss",
                  loss,
-                 on_step=True,
+                 on_step=False,
                  on_epoch=True,
                  prog_bar=True,
                  logger=True,
@@ -162,7 +184,7 @@ class LitMonai(LightningModule):
         avg_accuracy = torch.nanmean(accuracy)
         accuracy_per_class = torch.nanmean(accuracy, dim=0)
         accuracy_per_class_dict = {
-            f"{prefix}/class{idx}_accuracy": acc for idx, acc in enumerate(accuracy_per_class)
+            f"{prefix}/accuracy/class_{idx}": acc for idx, acc in enumerate(accuracy_per_class)
         }
         self.log_dict(
             accuracy_per_class_dict,
@@ -172,8 +194,8 @@ class LitMonai(LightningModule):
             batch_size=1
         )
         self.log_dict({
-            f"{prefix}/loss": loss,
-            f"{prefix}/avg_accuracy": avg_accuracy.item()},  # Here item is needed to avid error in Early Stopping
+            f"{prefix}/loss/avg": loss,
+            f"{prefix}/accuracy/avg": avg_accuracy.item()},  # Here item is needed to avid error in Early Stopping
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -202,9 +224,9 @@ class LitMonai(LightningModule):
         accuracy_per_modality = {}
         loss_per_modality = {}
         for modality in np.unique(validation_outputs['modality']):
-            accuracy_per_modality[f"{prefix}/modality{int(modality)}_accuracy"] = \
+            accuracy_per_modality[f"{prefix}/accuracy/modality_{int(modality)}"] = \
                 np.nanmean(validation_outputs['accuracy'][validation_outputs['modality'] == modality])
-            loss_per_modality[f"{prefix}/modality{int(modality)}_loss"] = \
+            loss_per_modality[f"{prefix}/loss/modality_{int(modality)}"] = \
                 np.nanmean(validation_outputs['loss'][validation_outputs['modality'] == modality])
         self.log_dict(accuracy_per_modality,
                       logger=True,
@@ -244,15 +266,29 @@ class LitMonai(LightningModule):
         else:
             raise ValueError("Optimization {} not implemented, please chose another optimizer.".format(self.optim_name))
 
-        if self.warmup_epochs:
+        if self.scheduler == 'warmup_cosine':
             scheduler = WarmupCosineSchedule(
                 optimizer=optimizer,
                 warmup_steps=self.warmup_epochs,
                 t_total=self.max_epochs
             )
-        else:
+        elif self.scheduler == 'cosine':
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer=optimizer,
                 T_max=self.max_epochs
             )
-        return [optimizer], [scheduler]
+        elif self.scheduler == 'reduce_on_plateau':
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer=optimizer,
+                patience=self.patience,
+            )
+        else:
+            raise ValueError("Scheduler {} not implemented, please chose another optimizer.".format(self.scheduler))
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                'scheduler': scheduler,
+                'monitor': "val/loss/avg",
+                'frequency': self.check_val_every_n_epoch
+            }
+        }

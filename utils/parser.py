@@ -42,6 +42,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     '''
     # Loss,
     group = parser.add_argument_group("loss")
+    group.add_argument("--criterion", default="dice_focal", type=str, help="criterion for training loss")
     group.add_argument("--squared_dice", action="store_true", help="use squared Dice")
     group.add_argument("--smooth_nr", default=0.0, type=float, help="constant added to dice numerator to avoid zero")
     group.add_argument("--smooth_dr", default=1e-6, type=float, help="constant added to dice denominator to avoid nan")
@@ -52,6 +53,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--reg_weight", default=1e-5, type=float, help="regularization weight")
     group.add_argument("--momentum", default=0.99, type=float, help="momentum only for SGD")
     # Scheduler
+    group.add_argument("--scheduler", default="reduce_on_plateau", type=str, help="learning rate scheduler algorithm")
     group.add_argument("--warmup_epochs", default=50, type=int, help="number of warmup epochs")
     # Inference
     group = parser.add_argument_group("inference")
@@ -60,7 +62,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--infer_cpu", action="store_true", help="Save in CPU the stitched output prediction")
     # Early stop
     group = parser.add_argument_group("early_stop")
-    group.add_argument("--patience", default=3, type=int, help="patience for early stop")
+    group.add_argument("--patience", default=6, type=int, help="patience for early stop")
     group.add_argument("--min_delta", default=0.00, type=float,
                        help="minimum change the monitored in accuracy to qualify as an improvement")
     # Checkpointing
@@ -73,8 +75,6 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--project", type=str, help="wandb project")
     group.add_argument("--entity", type=str, help="wandb entity")
     group.add_argument("--wandb_mode", type=str, default='online', help="Mode for wandb logger")
-    group.add_argument("--wandb_dir", type=str, help="An absolute path to a directory where metadata will be stored."
-                                                     "By default, this is the ./wandb directory.")
     return parser
 
 
