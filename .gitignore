@@ -136,3 +136,4 @@ dmypy.json
 /wandb/
 /dataset/MultiModalPelvic/notebooks/
 /notebooks/
+/experiments/

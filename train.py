@@ -53,14 +53,21 @@ def main(args):
         ],
         logger=wandb_logger
     )
+    '''
     if args.auto_lr_find:
-        lr_finder = trainer.tuner.lr_find(lit_model, lit_data)
+        lr_finder = trainer.tuner.lr_find(lit_model, lit_data, num_training=10)
         fig = lr_finder.plot(suggest=True)
         new_lr = lr_finder.suggestion()
         print("Best learning rate found for this trial with tuner: ", new_lr)
         lit_model.hparams.learning_rate = new_lr
-        Path(os.path.join(args.project, 'lr_finder')).mkdir(exist_ok=True, parents=True)
-        plt.savefig(os.path.join(args.project, 'lr_finder', wandb_logger.experiment.id + '.pdf'))
+        Path(os.path.join(trainer.default_root_dir, args.project, 'lr_finder')).mkdir(exist_ok=True, parents=True)
+        plt.savefig(os.path.join(trainer.default_root_dir, args.project, 'lr_finder',
+                                 wandb_logger.experiment.id + '.pdf'))
+    '''
+    trainer.tune(
+        lit_model,
+        lit_data
+    )
     trainer.fit(
         lit_model,
         lit_data,
