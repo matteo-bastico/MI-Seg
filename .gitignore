@@ -131,9 +131,12 @@ dmypy.json
 # Slurm 
 *.slurm
 
-#data
+#custom
 /dataset/MultiModalPelvic/data/**
 /wandb/
 /dataset/MultiModalPelvic/notebooks/
 /notebooks/
 /experiments/
+/pretrained/*
+/test*.py
+/.idea

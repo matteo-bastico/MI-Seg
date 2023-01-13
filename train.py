@@ -23,7 +23,8 @@ def main(args):
         project=args.project if args.project else None,
         entity=args.entity if args.entity else None,
         log_model=False,  # Do not log the models online, too heavy
-        mode=args.wandb_mode
+        mode=args.wandb_mode,
+        save_dir=args.default_root_dir,
     )
     if args.auto_lr_find:
         # It is not supported in ddp, do on single node and then start other trainer with new lr
