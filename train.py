@@ -33,7 +33,11 @@ def main(args):
             warnings.warn("Provided devices > 1 or auto. If several devices are available, "
                           "the best learning rate will be calculated on single device. "
                           "Pytorch Lightning does not support learning rate tuning in ddp.")
-        trainer = Trainer.from_argparse_args(args, devices=1, logger=False)
+        if args.accelerator == 'cpu':
+            devices = 'auto'
+        else:
+            devices = [0]
+        trainer = Trainer.from_argparse_args(args, devices=devices, logger=False)
         lr_finder = trainer.tuner.lr_find(lit_model, lit_data)
         fig = lr_finder.plot(suggest=True)
         new_lr = lr_finder.suggestion()
