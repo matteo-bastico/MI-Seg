@@ -17,6 +17,7 @@ import torch.nn as nn
 
 from monai.networks.blocks.convolutions import Convolution
 from monai.networks.layers.factories import Act, Norm
+from networks.norms.conditional_instance_norm import _ConditionalInstanceNorm
 from monai.networks.layers.utils import get_act_layer  # , get_norm_layer
 from ..layers.utils import get_norm_layer
 
@@ -97,25 +98,26 @@ class UnetResBlock(nn.Module):
             self.norm3 = get_norm_layer(name=norm_name, spatial_dims=spatial_dims, channels=out_channels)
 
     def forward(self, inp, modalities=None):
-        if self.norm_name == "instance_cond" and modalities is None:
+        # Check only norm 1, the rest is the same
+        if isinstance(self.norm1, _ConditionalInstanceNorm) and modalities is None:
             raise ValueError("Modalities must be passed to the forward step when encoder_norm_type is 'instance_cond'.")
 
         residual = inp
         out = self.conv1(inp)
-        if self.norm_name == "instance_cond":
+        if isinstance(self.norm1, _ConditionalInstanceNorm):
             out = self.norm1(out, modalities)
         else:
             out = self.norm1(out)
         out = self.lrelu(out)
         out = self.conv2(out)
-        if self.norm_name == "instance_cond":
+        if isinstance(self.norm2, _ConditionalInstanceNorm):
             out = self.norm2(out, modalities)
         else:
             out = self.norm2(out)
         if hasattr(self, "conv3"):
             residual = self.conv3(residual)
         if hasattr(self, "norm3"):
-            if self.norm_name == "instance_cond":
+            if isinstance(self.norm3, _ConditionalInstanceNorm):
                 residual = self.norm3(residual, modalities)
             else:
                 residual = self.norm3(residual)
@@ -183,17 +185,17 @@ class UnetBasicBlock(nn.Module):
         self.norm2 = get_norm_layer(name=norm_name, spatial_dims=spatial_dims, channels=out_channels)
 
     def forward(self, inp, modalities=None):
-        if self.norm_name == "instance_cond" and modalities is None:
+        if isinstance(self.norm1, _ConditionalInstanceNorm) and modalities is None:
             raise ValueError("Modalities must be passed to the forward step when encoder_norm_type is 'instance_cond'.")
 
         out = self.conv1(inp)
-        if self.norm_name == "instance_cond":
+        if isinstance(self.norm1, _ConditionalInstanceNorm):
             out = self.norm1(out, modalities)
         else:
             out = self.norm1(out)
         out = self.lrelu(out)
         out = self.conv2(out)
-        if self.norm_name == "instance_cond":
+        if isinstance(self.norm2, _ConditionalInstanceNorm):
             out = self.norm2(out, modalities)
         else:
             out = self.norm2(out)

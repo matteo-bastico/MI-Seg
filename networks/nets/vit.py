@@ -19,6 +19,7 @@ from monai.utils import optional_import
 from monai.networks.blocks.patchembedding import PatchEmbeddingBlock
 from ..blocks.transformer_block import TransformerBlock
 from ..layers.utils import get_norm_layer
+from ..norms.conditional_instance_norm import _ConditionalInstanceNorm
 
 rearrange, _ = optional_import("einops", name="rearrange")
 
@@ -136,7 +137,7 @@ class ViT(nn.Module):
                 x,
                 modalities=None):
 
-        if self.norm_type == "instance_cond" and modalities is None:
+        if isinstance(self.norm, _ConditionalInstanceNorm) and modalities is None:
             raise ValueError("Modalities must be passed to the forward step when encoder_norm_type is 'instance_cond'.")
 
         x = self.patch_embedding(x)
@@ -154,7 +155,7 @@ class ViT(nn.Module):
         else:
             # All other norms types need rearrange
             x = rearrange(x, "n l c -> n c l")
-            if self.norm_type == "instance_cond":
+            if isinstance(self.norm, _ConditionalInstanceNorm):
                 x = self.norm(x, modalities)
             else:
                 x = self.norm(x)

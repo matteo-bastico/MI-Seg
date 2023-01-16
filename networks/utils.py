@@ -2,12 +2,15 @@ import torch
 import warnings
 
 from networks.nets.unetr import UNETR
+from networks.nets.unet import UNet
 
 
 def model_from_argparse_args(args):
     model_name = args.model_name
     if model_name == 'unetr':
         model = UNETR.from_argparse_args(args)
+    elif model_name == 'unet':
+        model = UNet.from_argparse_args(args)
     else:
         raise ValueError("Model {} not implemented. Please chose another model.".format(model_name))
 

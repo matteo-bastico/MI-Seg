@@ -15,6 +15,9 @@ from typing import Union, Tuple
 from monai.utils import optional_import
 from monai.networks.blocks.mlp import MLPBlock
 from monai.networks.blocks.selfattention import SABlock
+from networks.norms.conditional_instance_norm import _ConditionalInstanceNorm
+from torch.nn.modules.normalization import LayerNorm
+
 from ..layers.utils import get_norm_layer
 
 rearrange, _ = optional_import("einops", name="rearrange")
@@ -73,16 +76,16 @@ class TransformerBlock(nn.Module):
     def forward(self,
                 x,
                 modalities=None):
-        if self.norm_type == "instance_cond" and modalities is None:
+        if isinstance(self.norm1, _ConditionalInstanceNorm) and modalities is None:
             raise ValueError("Modalities must be passed to the forward step when encoder_norm_type is 'instance_cond'.")
 
         # First normalization
-        if self.norm_type == "layer":
+        if isinstance(self.norm1, LayerNorm):
             x_norm = self.norm1(x)
         else:
             # All other norms types need rearrange
             x_norm = rearrange(x, "n l c -> n c l")
-            if self.norm_type == "instance_cond":
+            if isinstance(self.norm1, _ConditionalInstanceNorm):
                 x_norm = self.norm1(x_norm, modalities)
             else:
                 x_norm = self.norm1(x_norm)
@@ -91,12 +94,12 @@ class TransformerBlock(nn.Module):
         x = x + self.attn(x_norm)
 
         # Second normalization
-        if self.norm_type == "layer":
+        if isinstance(self.norm2, LayerNorm):
             x_norm = self.norm2(x)
         else:
             # All other norms types need rearrange
             x_norm = rearrange(x, "n l c -> n c l")
-            if self.norm_type == "instance_cond":
+            if isinstance(self.norm2, _ConditionalInstanceNorm):
                 x_norm = self.norm2(x_norm, modalities)
             else:
                 x_norm = self.norm2(x_norm)

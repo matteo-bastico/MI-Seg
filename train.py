@@ -61,6 +61,7 @@ def main(args):
         trainer.tune(lit_model, lit_data)
     except Exception as e:
         warnings.warn("Tuning skipped due to Exception: {}".format(e))
+
     trainer.fit(
         lit_model,
         lit_data,

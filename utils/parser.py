@@ -40,6 +40,21 @@ def add_model_argparse_args(parser: ArgumentParser):
     parser.add_argument("--attn_drop_rate", default=0.0, type=float, help="attn drop rate")
     parser.add_argument("--use_checkpoint", action="store_true", help="use gradient checkpointing to save memory")
     '''
+    # Unet specific parameters
+    group.add_argument("--num_layers", type=int, default=4, help="UNet number of layers")
+    group.add_argument('--strides', default=[2, 2, 2], nargs='+',
+                       help='Strides for UNet layers (List)', type=int)
+    group.add_argument('--kernel_size', default=3, nargs='+',
+                       help='Kernel size for UNet layers (List or int)', type=int)
+    group.add_argument('--up_kernel_size', default=3, nargs='+',
+                       help='Up kernel size for UNet layers (List or int)', type=int)
+    group.add_argument('--num_res_units', default=2,
+                       help='Number of residual units for the UNet layers', type=int)
+    group.add_argument('--activation', default="prelu",
+                       help='Activation function in UNet', type=str)
+    group.add_argument("--no_bias", action="store_true", help="Not use bias in UNet")
+    group.add_argument('--adn_ordering', default="NDA",
+                       help='Order of activation, dropout and normalization in UNet', type=str)
     # Loss,
     group = parser.add_argument_group("loss")
     group.add_argument("--criterion", default="dice_focal", type=str, help="criterion for training loss")

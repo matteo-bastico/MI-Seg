@@ -67,8 +67,8 @@ import torch
 import torch.nn as nn
 
 from monai.utils import look_up_option, optional_import
-from ..norms.conditional_instance_norm import ConditionalInstanceNorm1D, ConditionalInstanceNorm2D, \
-    ConditionalInstanceNorm3D
+from ..norms.conditional_instance_norm import ConditionalInstanceNorm1d, ConditionalInstanceNorm2d, \
+    ConditionalInstanceNorm3d
 
 
 InstanceNorm3dNVFuser, has_nvfuser = optional_import("apex.normalization", name="InstanceNorm3dNVFuser")
@@ -226,9 +226,9 @@ def instance_factory(dim: int) -> Type[Union[nn.InstanceNorm1d, nn.InstanceNorm2
 
 # Added new instance_cond factory
 @Norm.factory_function("instance_cond")
-def instance_cond_factory(dim: int) -> Type[Union[ConditionalInstanceNorm1D, ConditionalInstanceNorm2D,
-                                                  ConditionalInstanceNorm3D]]:
-    types = (ConditionalInstanceNorm1D, ConditionalInstanceNorm2D, ConditionalInstanceNorm3D)
+def instance_cond_factory(dim: int) -> Type[Union[ConditionalInstanceNorm1d, ConditionalInstanceNorm2d,
+                                                  ConditionalInstanceNorm3d]]:
+    types = (ConditionalInstanceNorm1d, ConditionalInstanceNorm2d, ConditionalInstanceNorm3d)
     return types[dim - 1]
 
 
