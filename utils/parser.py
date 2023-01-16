@@ -61,6 +61,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--squared_dice", action="store_true", help="use squared Dice")
     group.add_argument("--smooth_nr", default=0.0, type=float, help="constant added to dice numerator to avoid zero")
     group.add_argument("--smooth_dr", default=1e-6, type=float, help="constant added to dice denominator to avoid nan")
+    group.add_argument("--no_include_background", action="store_true", help="Not include background in loss computation")
     # Optimizer
     group = parser.add_argument_group("optimizer")
     group.add_argument("--lr", default=1e-4, type=float, help="optimization learning rate")

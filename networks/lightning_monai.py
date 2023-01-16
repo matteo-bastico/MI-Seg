@@ -38,12 +38,14 @@ class LitMonai(LightningModule):
                  patience: Union[int, None] = None,
                  check_val_every_n_epoch: Union[int, None] = None,
                  max_epochs: int = 5000,
+                 include_background: bool = False,
                  **kwargs
                  ):
         super().__init__()
         self.model = model
         if criterion == "dice_focal":
             self.criterion = DiceFocalLoss(
+                include_background=include_background,
                 to_onehot_y=True,
                 softmax=True,
                 squared_pred=True,
@@ -52,6 +54,7 @@ class LitMonai(LightningModule):
             )
         elif criterion == "dice_ce":
             self.criterion = DiceCELoss(
+                include_background=include_background,
                 to_onehot_y=True,
                 softmax=True,
                 squared_pred=squared_pred,
@@ -130,6 +133,7 @@ class LitMonai(LightningModule):
             patience=args.patience / 2,
             check_val_every_n_epoch=args.check_val_every_n_epoch,
             max_epochs=args.max_epochs,
+            include_background=not args.no_include_background,
             **additional_kwargs
         )
 
@@ -288,7 +292,7 @@ class LitMonai(LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 'scheduler': scheduler,
-                'monitor': "val/loss/avg",
+                'monitor': "val/accuracy/avg",
                 'frequency': self.check_val_every_n_epoch
             }
         }
