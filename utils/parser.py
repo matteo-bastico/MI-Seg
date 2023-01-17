@@ -79,7 +79,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     # Early stop
     group = parser.add_argument_group("early_stop")
     group.add_argument("--patience", default=6, type=int, help="patience for early stop")
-    group.add_argument("--min_delta", default=0.00, type=float,
+    group.add_argument("--min_delta", default=0.001, type=float,
                        help="minimum change the monitored in accuracy to qualify as an improvement")
     # Checkpointing
     group = parser.add_argument_group("checkpointing")

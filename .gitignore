@@ -140,3 +140,4 @@ dmypy.json
 /pretrained/*
 /test*.py
 /.idea
+/ray_lightning/

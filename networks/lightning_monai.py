@@ -292,7 +292,7 @@ class LitMonai(LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 'scheduler': scheduler,
-                'monitor': "val/accuracy/avg",
+                'monitor': "val/loss/avg",
                 'frequency': self.check_val_every_n_epoch
             }
         }
