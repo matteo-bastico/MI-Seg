@@ -32,9 +32,12 @@ def main(args):
     lr_finder = trainer.tuner.lr_find(
         lit_model,
         lit_data,
-        num_training=args.num_training
-    )  # TODO: See if useful to add other parameters as argument
-    fig = lr_finder.plot(suggest=True)
+        num_training=args.num_training,
+        min_lr=args.min_lr,
+        max_lr=args.max_lr,
+        mode=args.finder_mode
+    )
+    fig = lr_finder.plot(suggest=True, )
     new_lr = lr_finder.suggestion()
     print("Best learning rate found for this trial with tuner: ", new_lr)
     lit_model.hparams.learning_rate = new_lr
@@ -50,9 +53,11 @@ if __name__ == "__main__":
     parser = Trainer.add_argparse_args(parser)
     parser = add_model_argparse_args(parser)
     parser = add_data_argparse_args(parser)
-    parser.add_argument("--num_trainings", type=int, default=100, help="Number of training for lr_find")
-    parser.add_argument_group("lr_tuner")
-
+    group = parser.add_argument_group("lr_tuner")
+    group.add_argument("--num_training", type=int, default=50, help="Number of training for lr_find")
+    group.add_argument("--min_lr", type=float, default=5e-6, help="Minimum learning rate for lr_find")
+    group.add_argument("--max_lr", type=float, default=5e-2, help="Number of training for lr_find")
+    group.add_argument("--finder_mode", type=str, default="exponential", help="Mode for lr finder")
     args = parser.parse_args()
     print(args)
     main(args)

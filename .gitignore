@@ -135,9 +135,10 @@ dmypy.json
 /dataset/MultiModalPelvic/data/**
 /wandb/
 /dataset/MultiModalPelvic/notebooks/
-/notebooks/
+/tests/
 /experiments/
 /pretrained/*
 /test*.py
 /.idea
 /ray_lightning/
+tune.py
