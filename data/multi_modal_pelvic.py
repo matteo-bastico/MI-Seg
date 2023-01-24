@@ -5,7 +5,8 @@ from typing import List, Union, Any
 from monai import transforms, data
 from pytorch_lightning import LightningDataModule, Trainer
 from data.utils import load_decathlon_datalist_with_modality
-from torch.utils.data import ConcatDataset, DistributedSampler
+from torch.utils.data import ConcatDataset
+from torch.utils.data.distributed import DistributedSampler
 from pytorch_lightning.utilities.argparse import from_argparse_args
 
 
@@ -287,7 +288,7 @@ def get_loaders(args):
             num_workers=num_workers,
             sampler=train_sampler,
             pin_memory=True,
-            # persistent_workers=True,  # In the example from Jean Zay they don't use this
+            persistent_workers=num_workers > 0,  # In the example from Jean Zay they don't use this
         )
         # Validation
         datalists = [load_decathlon_datalist_with_modality(
@@ -306,7 +307,7 @@ def get_loaders(args):
             num_workers=num_workers,
             sampler=val_sampler,
             pin_memory=True,
-            # persistent_workers=True,  # In the example from Jean Zay they don't use this
+            persistent_workers=num_workers > 0,  # In the example from Jean Zay they don't use this
         )
         return train_loader, val_loader
     else:
@@ -327,6 +328,6 @@ def get_loaders(args):
             num_workers=num_workers,
             sampler=test_sampler,
             pin_memory=True,
-            # persistent_workers=True,  # In the example from Jean Zay they don't use this
+            persistent_workers=num_workers > 0,  # In the example from Jean Zay they don't use this
         )
         return test_loader

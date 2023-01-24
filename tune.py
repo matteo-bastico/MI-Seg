@@ -27,6 +27,7 @@ def train_epoch(model, loader, optimizer, criterion, device, scaler):
         data, target = batch["image"], batch["label"]
         data, target = data.to(device), target.to(device)
         modality = None
+        print(data.shape)
         if "modality" in batch.keys():
             modality = batch["modality"]
             modality = modality.to(device)
@@ -61,6 +62,7 @@ def val_epoch(model, loader, criterion, device, acc_func, model_inferer=None, po
             data, target = batch["image"], batch["label"]
             data, target = data.to(device), target.to(device)
             modality = None
+            print(data.shape)
             if "modality" in batch.keys():
                 modality = batch["modality"]
                 modality = modality.to(device)
@@ -124,6 +126,9 @@ def objective(args, single_trial):
         scaler = GradScaler()
     # Train and validation
     for epoch in range(1, args.max_epochs + 1):
+        if args.distributed:
+            train_loader.sampler.set_epoch(epoch)
+            torch.distributed.barrier()
         # Train one epoch
         epoch_loss = train_epoch(
             model,
@@ -172,15 +177,21 @@ if __name__ == '__main__':
         args.world_size = int(os.environ["SLURM_NTASKS"])
         args.local_rank = int(os.environ["SLURM_LOCALID"])
         args.world_rank = int(os.environ["SLURM_PROCID"])
+        print("World size: ", args.world_size)
+        print("Local rank: ", args.local_rank)
+        print("World rank: ", args.world_rank)
         args.device = torch.device(args.local_rank)
         if args.world_size > 1:
             args.distributed = True
-            torch.multiprocessing.set_start_method("spawn", force=True)
+            # Removed set_start_method causing DataLoader workers exiting unexpectedly
+            #  torch.multiprocessing.set_start_method("spawn", force=True)
             os.environ["MASTER_ADDR"] = "127.0.0.1"
             os.environ["MASTER_PORT"] = "23456"
             dist.init_process_group(
                 backend="nccl", world_size=args.world_size, rank=args.local_rank
             )
+        else:
+            args.distributed = False
     else:
         args.distributed = False
         args.device = "cuda:0" if torch.cuda.is_available() and not args.no_gpu else "cpu"
