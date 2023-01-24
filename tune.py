@@ -13,6 +13,7 @@ from data.multi_modal_pelvic import get_loaders
 from torch.cuda.amp import GradScaler, autocast
 from networks.utils import model_from_argparse_args
 from monai.inferers import sliding_window_inference
+from torch.nn.parallel import DistributedDataParallel as DDP
 from optuna.storages import JournalStorage, JournalFileStorage
 from utils.utils import loss_from_argparse_args, optimizer_from_argparse_args
 from utils.parser import add_model_argparse_args, add_data_argparse_args, add_tune_argparse_args
@@ -87,6 +88,8 @@ def objective(args, single_trial):
     if args.distributed:
         trial = optuna.integration.TorchDistributedTrial(single_trial)
     model = model_from_argparse_args(args).to(args.device)
+    if args.distributed:
+        model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
     dice = torchmetrics.Dice(
         average='macro',  # Calculate the metric for each class separately,
         # and average the metrics across classes (with equal weights for each class).
