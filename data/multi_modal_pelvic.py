@@ -4,9 +4,9 @@ from argparse import Namespace, ArgumentParser
 from typing import List, Union, Any
 from monai import transforms, data
 from pytorch_lightning import LightningDataModule, Trainer
-from torch.utils.data import ConcatDataset
-from pytorch_lightning.utilities.argparse import from_argparse_args
 from data.utils import load_decathlon_datalist_with_modality
+from torch.utils.data import ConcatDataset, DistributedSampler
+from pytorch_lightning.utilities.argparse import from_argparse_args
 
 
 class MultiModalPelvicDataModule(LightningDataModule):
@@ -199,3 +199,134 @@ class MultiModalPelvicDataModule(LightningDataModule):
             pin_memory=True,
             persistent_workers=self.num_workers > 0,
         )
+
+
+def get_loaders(args):
+    data_dir = args.data_dir
+    datalist_jsons = [os.path.join(data_dir, json_list) for json_list in args.json_lists]
+    train_transforms = transforms.Compose(
+        [
+            transforms.LoadImaged(keys=["image", "label"]),
+            transforms.EnsureChannelFirstd(keys=["image", "label"]),
+            transforms.Orientationd(keys=["image", "label"], axcodes="RAS"),
+            transforms.Spacingd(
+                keys=["image", "label"], pixdim=(args.space_x, args.space_y, args.space_z),
+                mode=("bilinear", "nearest")
+            ),
+            transforms.ScaleIntensityd(keys=["image"]),
+            transforms.SpatialPadd(keys=["image", "label"],
+                                   spatial_size=(args.roi_x, args.roi_y, args.roi_z),
+                                   value=0),
+            transforms.RandCropByPosNegLabeld(
+                keys=["image", "label"],
+                label_key="label",
+                spatial_size=(args.roi_x, args.roi_y, args.roi_z),
+                pos=1,
+                neg=1,
+                num_samples=args.patches_training_sample,
+                image_key="image",
+                image_threshold=0,
+            ),
+            transforms.RandFlipd(keys=["image", "label"], prob=args.randFlipd_prob, spatial_axis=0),
+            transforms.RandFlipd(keys=["image", "label"], prob=args.randFlipd_prob, spatial_axis=1),
+            transforms.RandFlipd(keys=["image", "label"], prob=args.randFlipd_prob, spatial_axis=2),
+            transforms.RandRotate90d(keys=["image", "label"], prob=args.randRotate90d_prob, max_k=3),
+            transforms.RandScaleIntensityd(keys="image", factors=0.1, prob=args.randScaleIntensityd_prob),
+            transforms.RandShiftIntensityd(keys="image", offsets=0.1, prob=args.randShiftIntensityd_prob),
+            transforms.ToTensord(keys=["image", "label"]),
+        ]
+    )
+    val_transforms = transforms.Compose(
+        [
+            transforms.LoadImaged(keys=["image", "label"]),
+            transforms.EnsureChannelFirstd(keys=["image", "label"]),
+            transforms.Orientationd(keys=["image", "label"], axcodes="RAS"),
+            transforms.Spacingd(
+                keys=["image", "label"], pixdim=(args.space_x, args.space_y, args.space_z),
+                mode=("bilinear", "nearest")
+            ),
+            transforms.ScaleIntensityd(keys=["image"]),
+            transforms.SpatialPadd(keys=["image", "label"],
+                                   spatial_size=(args.roi_x, args.roi_y, args.roi_z),
+                                   value=0),
+            transforms.ToTensord(keys=["image", "label"]),
+        ]
+    )
+    use_normal_dataset = args.use_normal_dataset
+    cache_num = args.cache_num
+    loader_workers = args.loader_workers
+    batch_size = args.batch_size
+    num_workers = args.num_workers
+    # Train
+    if not args.test_mode:
+        datalists = [load_decathlon_datalist_with_modality(
+            datalist_json,
+            True,
+            "training",
+            base_dir=data_dir
+        ) for datalist_json in datalist_jsons]
+        if use_normal_dataset:
+            train_datasets = [data.Dataset(
+                data=datalist,
+                transform=train_transforms,
+            ) for datalist in datalists]
+        else:
+            train_datasets = [data.CacheDataset(
+                data=datalist,
+                transform=train_transforms,
+                cache_num=cache_num,
+                cache_rate=1.0,
+                num_workers=loader_workers
+            ) for datalist in datalists]
+        train_dataset = ConcatDataset(train_datasets)
+        train_sampler = DistributedSampler(train_dataset) if args.distributed else None
+        train_loader = data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=(train_sampler is None),
+            num_workers=num_workers,
+            sampler=train_sampler,
+            pin_memory=True,
+            # persistent_workers=True,  # In the example from Jean Zay they don't use this
+        )
+        # Validation
+        datalists = [load_decathlon_datalist_with_modality(
+            datalist_json,
+            True,
+            "validation",
+            base_dir=data_dir
+        ) for datalist_json in datalist_jsons]
+        val_datasets = [data.Dataset(data=datalist, transform=val_transforms) for datalist in datalists]
+        val_dataset = ConcatDataset(val_datasets)
+        val_sampler = DistributedSampler(val_dataset, shuffle=False) if args.distributed else None
+        val_loader = data.DataLoader(
+            val_dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=num_workers,
+            sampler=val_sampler,
+            pin_memory=True,
+            # persistent_workers=True,  # In the example from Jean Zay they don't use this
+        )
+        return train_loader, val_loader
+    else:
+        # Validation
+        datalists = [load_decathlon_datalist_with_modality(
+            datalist_json,
+            True,
+            "test",
+            base_dir=data_dir
+        ) for datalist_json in datalist_jsons]
+        test_datasets = [data.Dataset(data=datalist, transform=val_transforms) for datalist in datalists]
+        test_dataset = ConcatDataset(test_datasets)
+        test_sampler = DistributedSampler(test_dataset, shuffle=False) if args.distributed else None
+        test_loader = data.DataLoader(
+            test_dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=num_workers,
+            sampler=test_sampler,
+            pin_memory=True,
+            # persistent_workers=True,  # In the example from Jean Zay they don't use this
+        )
+        return test_loader

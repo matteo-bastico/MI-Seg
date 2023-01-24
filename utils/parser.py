@@ -115,3 +115,13 @@ def add_data_argparse_args(parser: ArgumentParser):
     group.add_argument("--batch_size", default=1, type=int, help="number of batch size")
     group.add_argument("--num_workers", default=8, type=int, help="number of workers for the dataloaders")
     return parser
+
+
+def add_tune_argparse_args(parser: ArgumentParser):
+    group = parser.add_argument_group("tune")
+    group.add_argument("--study_name", default="experiment", type=str, help="optuna study name")
+    group.add_argument("--n_trials", default=2, type=int, help="optuna number of experiment trials")
+    group.add_argument("--max_epochs", default=2, type=int, help="optuna number of experiment trials")
+    group.add_argument("--check_val_every_n_epoch", default=1, type=int, help="optuna number of experiment trials")
+    group.add_argument("--no_gpu", action="store_true", help="not use GPU on single training")
+    return parser

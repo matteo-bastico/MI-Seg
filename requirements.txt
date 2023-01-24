@@ -1,7 +1,9 @@
 torch~=1.13.1
 monai~=1.1.0
 numpy~=1.24.1
-wandb~=0.13.7
+wandb==0.13.9
 pydicom~=2.3.1
 simpleitk~=2.2.1
 matplotlib~=3.6.3
+optuna~=3.1.0
+torchmetrics~=0.11.0
