@@ -162,6 +162,7 @@ if __name__ == '__main__':
     parser = add_data_argparse_args(parser)
     parser = add_tune_argparse_args(parser)
     args = parser.parse_args()
+    args.amp = not args.no_amp
     # Set-up world size and rank in args for distributed trainings
     # If we are in the slurm cluster, use slurm enviromental variables to set-up distributed and override args
     # TODO: distributed is supported only in Slurm environment
