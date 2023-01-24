@@ -71,10 +71,8 @@ def val_epoch(model, loader, criterion, device, acc_func, model_inferer=None, po
             loss = criterion(output, target)
             print("validation ", loss)
             run_loss.update(loss)
-            val_labels_list = decollate_batch(target)
-            val_labels_convert = [post_label(val_label_tensor) for val_label_tensor in val_labels_list]
-            val_outputs_list = decollate_batch(output)
-            val_output_convert = [post_pred(val_pred_tensor) for val_pred_tensor in val_outputs_list]
+            val_labels_convert = post_label(target)
+            val_output_convert = post_pred(output)
             acc_func.update(val_output_convert, val_labels_convert)
             # TODO: per modality loss
     epoch_loss = run_loss.compute()
@@ -190,7 +188,8 @@ if __name__ == '__main__':
     if not args.distributed:
         study = optuna.create_study(
             direction="maximize",
-            storage="sqlite:///" + args.study_name + ".db",  # Specify the storage URL here.
+            # Specify the storage URL here.
+            storage="sqlite:///" + os.path.join(args.default_root_dir, 'optuna', args.study_name + ".db"),
             study_name=args.study_name,
             load_if_exists=True  # Needed if we run parallelized optimization
         )
@@ -200,7 +199,8 @@ if __name__ == '__main__':
             n_trials=args.n_trials
         )
     else:
-        storage = JournalStorage(JournalFileStorage("journal.log"))
+        storage = JournalStorage(JournalFileStorage(os.path.join(args.default_root_dir, 'optuna',
+                                                                 args.study_name + ".log")))
         study = None
         if args.local_rank == 0:
             study = optuna.create_study(

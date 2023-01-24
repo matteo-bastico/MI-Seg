@@ -125,4 +125,5 @@ def add_tune_argparse_args(parser: ArgumentParser):
     group.add_argument("--check_val_every_n_epoch", default=1, type=int, help="optuna number of experiment trials")
     group.add_argument("--no_gpu", action="store_true", help="not use GPU on single training")
     group.add_argument("--no_amp", action="store_true", help="not use GPU on single training")
+    group.add_argument("--default_root_dir", default="./experiments", type=str, help="not use GPU on single training")
     return parser
