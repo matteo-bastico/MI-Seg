@@ -7,7 +7,10 @@ import torchmetrics
 from functools import partial
 import torch.distributed as dist
 from argparse import ArgumentParser
+from monai.data import decollate_batch
+from monai.transforms import AsDiscrete
 from data.multi_modal_pelvic import get_loaders
+from torch.cuda.amp import GradScaler, autocast
 from networks.utils import model_from_argparse_args
 from monai.inferers import sliding_window_inference
 from optuna.storages import JournalStorage, JournalFileStorage
@@ -15,7 +18,7 @@ from utils.utils import loss_from_argparse_args, optimizer_from_argparse_args
 from utils.parser import add_model_argparse_args, add_data_argparse_args, add_tune_argparse_args
 
 
-def train_epoch(model, loader, optimizer, criterion, device):
+def train_epoch(model, loader, optimizer, criterion, device, scaler):
     model.train()
     start_time = time.time()
     run_loss = torchmetrics.MeanMetric().to(device)
@@ -27,12 +30,18 @@ def train_epoch(model, loader, optimizer, criterion, device):
             modality = batch["modality"]
             modality = modality.to(device)
         optimizer.zero_grad()
-        output = model(data, modality)
-        loss = criterion(output, target)
+        with autocast(enabled=args.amp):
+            output = model(data, modality)
+            loss = criterion(output, target)
         print(loss)
-        # TODO: AMP
-        loss.backward()
-        optimizer.step()
+        # If AMP is active
+        if args.amp:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
         # Update distributed running loss
         run_loss.update(loss)
         break
@@ -42,7 +51,7 @@ def train_epoch(model, loader, optimizer, criterion, device):
     return epoch_loss
 
 
-def val_epoch(model, loader, criterion, device, acc_func, model_inferer=None):
+def val_epoch(model, loader, criterion, device, acc_func, model_inferer=None, post_pred=None, post_label=None):
     model.eval()
     start_time = time.time()
     run_loss = torchmetrics.MeanMetric().to(device)
@@ -54,15 +63,19 @@ def val_epoch(model, loader, criterion, device, acc_func, model_inferer=None):
             if "modality" in batch.keys():
                 modality = batch["modality"]
                 modality = modality.to(device)
-            # TODO: amp
-            if model_inferer is not None:
-                output = model_inferer(data, modalities=modality)
-            else:
-                output = model(data, modality)
+            with autocast(enabled=args.amp):
+                if model_inferer is not None:
+                    output = model_inferer(data, modalities=modality)
+                else:
+                    output = model(data, modality)
             loss = criterion(output, target)
             print("validation ", loss)
             run_loss.update(loss)
-            acc_func.update(output, target)
+            val_labels_list = decollate_batch(target)
+            val_labels_convert = [post_label(val_label_tensor) for val_label_tensor in val_labels_list]
+            val_outputs_list = decollate_batch(output)
+            val_output_convert = [post_pred(val_pred_tensor) for val_pred_tensor in val_outputs_list]
+            acc_func.update(val_output_convert, val_labels_convert)
             # TODO: per modality loss
     epoch_loss = run_loss.compute()
     accuracy = acc_func.compute()
@@ -97,6 +110,16 @@ def objective(args, single_trial):
         predictor=model,
         overlap=args.infer_overlap,
     )
+    post_label = AsDiscrete(
+        to_onehot=args.out_channels
+    )
+    post_pred = AsDiscrete(
+        argmax=True,
+        to_onehot=args.out_channels
+    )
+    scaler = None
+    if args.amp:
+        scaler = GradScaler()
     # Train and validation
     for epoch in range(1, args.max_epochs + 1):
         # Train one epoch
@@ -105,7 +128,8 @@ def objective(args, single_trial):
             train_loader,
             optimizer,
             criterion,
-            args.device
+            args.device,
+            scaler
         )
         if epoch % args.check_val_every_n_epoch == 0:
             # Val one epoch
@@ -115,12 +139,20 @@ def objective(args, single_trial):
                 criterion,
                 args.device,
                 dice,
-                model_inferer
+                model_inferer,
+                post_pred,
+                post_label
             )
-            trial.report(accuracy, epoch)
-            # Handle pruning based on the intermediate value.
-            if trial.should_prune():
-                raise optuna.exceptions.TrialPruned()
+            if args.distributed:
+                trial.report(accuracy, epoch)
+                # Handle pruning based on the intermediate value.
+                if trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
+            else:
+                single_trial.report(accuracy, epoch)
+                # Handle pruning based on the intermediate value.
+                if single_trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
     return accuracy
 
 
@@ -154,15 +186,35 @@ if __name__ == '__main__':
     # JournalFileStorage is suggested if a database cannot be set up in NFS
     # It is also suggested to avoid SQLite
     # (https://optuna.readthedocs.io/en/stable/tutorial/10_key_features/004_distributed.html)
-    storage = JournalStorage(JournalFileStorage("journal.log"))
-    study = optuna.create_study(
-        direction="maximize",
-        storage=storage,  # Specify the storage URL here.
-        study_name=args.study_name,
-        load_if_exists=True  # Needed if we run parallelized optimization
-    )
-    # Start to optimization
-    study.optimize(
-        partial(objective, args),
-        n_trials=args.n_trials
-    )
+    if not args.distributed:
+        study = optuna.create_study(
+            direction="maximize",
+            storage="sqlite:///" + args.study_name + ".db",  # Specify the storage URL here.
+            study_name=args.study_name,
+            load_if_exists=True  # Needed if we run parallelized optimization
+        )
+        # Start to optimization
+        study.optimize(
+            partial(objective, args),
+            n_trials=args.n_trials
+        )
+    else:
+        storage = JournalStorage(JournalFileStorage("journal.log"))
+        study = None
+        if args.local_rank == 0:
+            study = optuna.create_study(
+                direction="maximize",
+                storage=storage,  # Specify the storage URL here.
+                study_name=args.study_name,
+                load_if_exists=True  # Needed if we run parallelized optimization
+            )
+            study.optimize(
+                partial(objective, args),
+                n_trials=args.n_trials
+            )
+        else:
+            for _ in range(args.n_trials):
+                try:
+                    objective(args, None)
+                except optuna.TrialPruned:
+                    pass

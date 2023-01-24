@@ -138,6 +138,8 @@ dmypy.json
 /tests/
 /experiments/
 /pretrained/*
+/slurm/
+/logs/
 /test*.py
 /.idea
 /ray_lightning/
