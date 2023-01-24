@@ -71,9 +71,10 @@ def val_epoch(model, loader, criterion, device, acc_func, model_inferer=None, po
             loss = criterion(output, target)
             print("validation ", loss)
             run_loss.update(loss)
-            val_labels_convert = post_label(target)
-            val_output_convert = post_pred(output)
-            acc_func.update(val_output_convert, val_labels_convert)
+            print(target.shape)
+            print(output.shape)
+            print(torch.all(target == target.int()))
+            acc_func.update(output, target.int())
             # TODO: per modality loss
     epoch_loss = run_loss.compute()
     accuracy = acc_func.compute()
