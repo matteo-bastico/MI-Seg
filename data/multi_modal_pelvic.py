@@ -1,12 +1,12 @@
 import os
 from argparse import Namespace, ArgumentParser
 
-from typing import List, Union, Any
 from monai import transforms, data
-from pytorch_lightning import LightningDataModule, Trainer
-from data.utils import load_decathlon_datalist_with_modality
+from typing import List, Union, Any
 from torch.utils.data import ConcatDataset
+from pytorch_lightning import LightningDataModule, Trainer
 from torch.utils.data.distributed import DistributedSampler
+from data.utils import load_decathlon_datalist_with_modality
 from pytorch_lightning.utilities.argparse import from_argparse_args
 
 

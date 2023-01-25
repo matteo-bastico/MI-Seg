@@ -1,5 +1,4 @@
 import os
-import time
 import torch
 import optuna
 import torchmetrics
@@ -7,83 +6,18 @@ import torchmetrics
 from functools import partial
 import torch.distributed as dist
 from argparse import ArgumentParser
-from monai.data import decollate_batch
+from monai.metrics import LossMetric
+from torch.cuda.amp import GradScaler
 from monai.transforms import AsDiscrete
+from monai.metrics.meandice import DiceMetric
 from data.multi_modal_pelvic import get_loaders
-from torch.cuda.amp import GradScaler, autocast
+from utils.trainer import train_epoch, val_epoch
 from networks.utils import model_from_argparse_args
 from monai.inferers import sliding_window_inference
 from torch.nn.parallel import DistributedDataParallel as DDP
 from optuna.storages import JournalStorage, JournalFileStorage
-from utils.utils import loss_from_argparse_args, optimizer_from_argparse_args
+from utils.training_utils import loss_from_argparse_args, optimizer_from_argparse_args
 from utils.parser import add_model_argparse_args, add_data_argparse_args, add_tune_argparse_args
-
-
-def train_epoch(model, loader, optimizer, criterion, device, scaler):
-    model.train()
-    start_time = time.time()
-    run_loss = torchmetrics.MeanMetric().to(device)
-    for idx, batch in enumerate(loader):
-        data, target = batch["image"], batch["label"]
-        data, target = data.to(device), target.to(device)
-        modality = None
-        print(data.shape)
-        if "modality" in batch.keys():
-            modality = batch["modality"]
-            modality = modality.to(device)
-        optimizer.zero_grad()
-        with autocast(enabled=args.amp):
-            output = model(data, modality)
-            loss = criterion(output, target)
-        print(loss)
-        # If AMP is active
-        if args.amp:
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            optimizer.step()
-        # Update distributed running loss
-        run_loss.update(loss)
-        break
-    # Total loss
-    epoch_loss = run_loss.compute()
-    run_loss.reset()
-    return epoch_loss
-
-
-def val_epoch(model, loader, criterion, device, acc_func, model_inferer=None, post_pred=None, post_label=None):
-    model.eval()
-    start_time = time.time()
-    run_loss = torchmetrics.MeanMetric().to(device)
-    with torch.no_grad():
-        for idx, batch in enumerate(loader):
-            data, target = batch["image"], batch["label"]
-            data, target = data.to(device), target.to(device)
-            modality = None
-            print(data.shape)
-            if "modality" in batch.keys():
-                modality = batch["modality"]
-                modality = modality.to(device)
-            with autocast(enabled=args.amp):
-                if model_inferer is not None:
-                    output = model_inferer(data, modalities=modality)
-                else:
-                    output = model(data, modality)
-            loss = criterion(output, target)
-            print("validation ", loss)
-            run_loss.update(loss)
-            print(target.shape)
-            print(output.shape)
-            print(torch.all(target == target.int()))
-            acc_func.update(output, target.int())
-            # TODO: per modality loss
-    epoch_loss = run_loss.compute()
-    accuracy = acc_func.compute()
-    run_loss.reset()
-    acc_func.reset()
-    return epoch_loss, accuracy
 
 
 def objective(args, single_trial):
@@ -92,13 +26,23 @@ def objective(args, single_trial):
     model = model_from_argparse_args(args).to(args.device)
     if args.distributed:
         model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    '''
     dice = torchmetrics.Dice(
-        average='macro',  # Calculate the metric for each class separately,
-        # and average the metrics across classes (with equal weights for each class).
+        average=None,  # Calculate the metric for each class separately, and return the metric for every class.
         num_classes=args.out_channels,
         ignore_index=0,  # It is recommend set ignore_index to index of background class.
         mdmc_average='samplewise'
     ).to(args.device)
+    '''
+    # Accuracy is a list of dice metrics, one for each modality
+    dice = DiceMetric(
+        include_background=not args.no_include_background,
+        reduction='mean_batch',  # This will give the accuracy per class in averaged on batches
+        get_not_nans=True  # Exclude nans from computation
+    )
+    # Post-processing for accuracy computation
+    post_label = AsDiscrete(to_onehot=args.out_channels)
+    post_pred = AsDiscrete(argmax=True, to_onehot=args.out_channels)
     # Define loss criterion from argparse args
     criterion = loss_from_argparse_args(args)
     # Define optimizer
@@ -114,17 +58,11 @@ def objective(args, single_trial):
         predictor=model,
         overlap=args.infer_overlap,
     )
-    post_label = AsDiscrete(
-        to_onehot=args.out_channels
-    )
-    post_pred = AsDiscrete(
-        argmax=True,
-        to_onehot=args.out_channels
-    )
     scaler = None
     if args.amp:
         scaler = GradScaler()
     # Train and validation
+    # TODO: add scheduler
     for epoch in range(1, args.max_epochs + 1):
         if args.distributed:
             train_loader.sampler.set_epoch(epoch)
@@ -136,8 +74,10 @@ def objective(args, single_trial):
             optimizer,
             criterion,
             args.device,
-            scaler
+            scaler,
+            amp=args.amp
         )
+        print(f"Train Epoch {epoch}, loss {epoch_loss}")
         if epoch % args.check_val_every_n_epoch == 0:
             # Val one epoch
             val_loss, accuracy = val_epoch(
@@ -146,10 +86,13 @@ def objective(args, single_trial):
                 criterion,
                 args.device,
                 dice,
-                model_inferer,
-                post_pred,
-                post_label
+                post_label=post_label,
+                post_pred=post_pred,
+                model_inferer=model_inferer,
+                amp=args.amp
             )
+            print(f"Val Epoch {epoch}, loss {val_loss}")
+            print(f"Val Epoch {epoch}, accuracy {accuracy}")
             if args.distributed:
                 trial.report(accuracy, epoch)
                 # Handle pruning based on the intermediate value.
