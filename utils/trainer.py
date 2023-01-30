@@ -36,16 +36,32 @@ def train_epoch(model, loader, optimizer, criterion, device, scaler, amp=True):
         break
     # Total loss
     epoch_loss = run_loss.aggregate(reduction='mean').item()
+    # Important to reset and free memory
     run_loss.reset()
     return epoch_loss
 
 
-def val_epoch(model, loader, criterion, device, acc_func, post_label, post_pred, model_inferer=None, amp=True):
+def val_epoch(
+        model,
+        loader,
+        criterion,
+        device,
+        acc_func,
+        post_label,
+        post_pred,
+        model_inferer=None,
+        amp=True,
+        surface_distance=None,
+        additional_metrics=None,
+        logger=None,
+        epoch=None):
     model.eval()
     start_time = time.time()
     run_loss = LossMetric(loss_fn=criterion)
     # Here we will store accuracy per modality
     acc_mod_cumulative = Cumulative()
+    if surface_distance is not None:
+        surface_mod_cumulative = Cumulative()
     with torch.no_grad():
         for idx, batch in enumerate(loader):
             data, target = batch["image"], batch["label"]
@@ -61,7 +77,8 @@ def val_epoch(model, loader, criterion, device, acc_func, post_label, post_pred,
                     output = model(data, modality)
             loss = criterion(output, target)
             run_loss(output, target)
-            print(f"Val batch {idx}, loss {loss.item()}")
+            # In the print we assume validation batch
+            print(f"Val batch {idx} modality {modality.tolist()}, loss {loss}")
             # run_loss.update(loss)
             # Compute accuracy
             # acc_func.update(output, target.int())
@@ -70,30 +87,26 @@ def val_epoch(model, loader, criterion, device, acc_func, post_label, post_pred,
             val_outputs_list = decollate_batch(output)
             val_output_convert = [post_pred(val_pred_tensor) for val_pred_tensor in val_outputs_list]
             batch_acc = acc_func(y_pred=val_output_convert, y=val_labels_convert)
-            acc_mod_cumulative.append(batch_acc, modality)
-            '''
-            if modality is not None:
-                for mod, acc in zip(modality, batch_acc):
-                    acc_per_modality.setdefault(mod.item(), []).append(acc)
+            print(f"Accuracy batch {idx} modality {modality.tolist()}, loss {batch_acc}")
+            # acc_mod_cumulative.append(batch_acc, modality)
+            acc_mod_cumulative.extend(batch_acc, modality)  # Extend is for append a batch-first array
+            # Update surface distance
+            if surface_distance is not None:
+                batch_surface = surface_distance(y_pred=val_output_convert, y=val_labels_convert)
+                surface_mod_cumulative.extend(batch_surface, modality)
+                print(f"Surface batch {idx} modality {modality.tolist()}, loss {batch_surface}")
+            # Update additional metrics is any
+            if additional_metrics:
+                for metric in additional_metrics:
+                    metric(y_pred=val_output_convert, y=val_labels_convert)
 
-    if acc_per_modality:
-        for mod, acc in acc_per_modality.items():
-            # First get average per class in each modality
-            acc = torch.stack(acc)
-            print(acc)
-            acc = torch.nanmean(acc, dim=0)  # This is per class
-            # Log
-            print(acc)
-            # Then total average per modality
-            acc = torch.nanmean(acc)  # This is average per modality
-            # Log
-            print(acc.item())     
-    '''
     # Here I will have a Tensor of size [N_batches, N_sample_per_batch, N_classes]
     acc, mod = acc_mod_cumulative.get_buffer()
-    # Flatten on first dim to have [N_samples, N_classes]
-    acc = acc.flatten(end_dim=1)
-    mod = mod.flatten(end_dim=1)
+    # Flatten on first dim to have [N_samples, N_classes] -> Not needed with extend instead of append
+    # acc = acc.flatten(end_dim=1)
+    # mod = mod.flatten(end_dim=1)
+    if logger is not None:
+        print(acc, mod)
     for m in torch.unique(mod):
         # Select only samples of that modality
         acc_m = acc[mod == m]
@@ -105,14 +118,71 @@ def val_epoch(model, loader, criterion, device, acc_func, post_label, post_pred,
         acc_m[nans] = 0
         # We have the accuracy per class here
         acc_m = torch.where(not_nans > 0, acc_m.sum(dim=0) / not_nans, t_zero)  # batch average
-        print(f"Accuracy per class [modality {m}]: {acc_m.tolist()}")
-        # Average accuracy. Note: as in monai we don't account for classes with all nans in the average
-        # This can make the average accuracy among modalities different from the total average accuracy !!
-        print(f"Average Accuracy [modality {m}]: {torch.nanmean(acc_m[not_nans > 0]).item()}")
+        if logger is not None:
+            print(f"Accuracy per class [modality {m}]: {acc_m.tolist()}")
+            dict_acc_class_modality = {}
+            for c, v in enumerate(acc_m.tolist()):
+                dict_acc_class_modality[f"val_modality{m}_dice/class{c}"] = v
+            logger.log(dict_acc_class_modality, epoch)
+            # Average accuracy. Note: as in monai we don't account for classes with all nans in the average
+            # This can make the average accuracy among modalities different from the total average accuracy !!
+            print(f"Average Accuracy [modality {m}]: {torch.nanmean(acc_m[not_nans > 0]).item()}")
+            logger.log({f"val_modality{m}_dice/avg": torch.nanmean(acc_m[not_nans > 0]).item()}, epoch)
+    if surface_distance is not None:
+        surf, mod_surf = surface_mod_cumulative.get_buffer()
+        if logger is not None:
+            print(surf, mod_surf)
+        for m in torch.unique(mod_surf):
+            # Select only samples of that modality
+            surf_m = surf[mod_surf == m]
+            # Reduce per modality (see monai.metrics.utils.py)
+            nans = torch.isnan(surf_m)
+            not_nans = (~nans).float()
+            t_zero = torch.zeros(1, device=surf_m.device, dtype=surf_m.dtype)
+            not_nans = not_nans.sum(dim=0)
+            surf_m[nans] = 0
+            # We have the surface distance per class here
+            surf_m = torch.where(not_nans > 0, surf_m.sum(dim=0) / not_nans, t_zero)  # batch average
+            if logger is not None:
+                print(f"Surface distance per class [modality {m}]: {surf_m.tolist()}")
+                dict_surf_class_modality = {}
+                for c, v in enumerate(surf_m.tolist()):
+                    dict_surf_class_modality[f"val_modality{m}_surface_distance/class{c}"] = v
+                logger.log(dict_surf_class_modality, epoch)
+                # Average surface distance. Note: as in monai we don't account for classes with all nans in the average
+                # This can make the average surface distance among modalities different from the total average accuracy
+                print(f"Average Surface Distance [modality {m}]: {torch.nanmean(surf_m[not_nans > 0]).item()}")
+                logger.log({f"val_modality{m}_surface_distance/avg": torch.nanmean(surf_m[not_nans > 0]).item()}, epoch)
     epoch_loss = run_loss.aggregate(reduction='mean').item()
     accuracy, not_nans = acc_func.aggregate()
-    print(f"Accuracy per class [tot]: {accuracy.tolist()}")
+    if logger is not None:
+        print(f"Accuracy per class [tot]: {accuracy.tolist()}")
+        dict_acc_class = {}
+        for c, v in enumerate(accuracy.tolist()):
+            dict_acc_class[f"val_total_dice/class{c}"] = v
+        logger.log(dict_acc_class, epoch)
+    if surface_distance is not None:
+        surface, not_nans_surface = surface_distance.aggregate()
+        if logger is not None:
+            print(f"Surface per class [tot]: {surface.tolist()}")
+            dict_surf_class = {}
+            for c, v in enumerate(accuracy.tolist()):
+                dict_surf_class[f"val_total_surface_distance/class{c}"] = v
+            logger.log(dict_surf_class, epoch)
+        surface_distance.reset()
+        surface_mod_cumulative.reset()
+    # Important to reset and free memory
     run_loss.reset()
     acc_func.reset()
     acc_mod_cumulative.reset()
-    return epoch_loss, torch.nanmean(accuracy[not_nans > 0]).item()
+    # Aggregate additional metric, if any
+    metrics = []
+    if additional_metrics:
+        for metric in additional_metrics:
+            metrics.append(metric.aggregate().item())
+            metric.reset()
+    if surface_distance is not None:
+        return epoch_loss, torch.nanmean(accuracy[not_nans > 0]).item(), \
+               torch.nanmean(surface[not_nans_surface > 0]).item(), metrics
+    else:
+        return epoch_loss, torch.nanmean(accuracy[not_nans > 0]).item(), metrics

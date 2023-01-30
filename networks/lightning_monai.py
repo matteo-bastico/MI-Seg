@@ -38,6 +38,8 @@ class LitMonai(LightningModule):
                  patience: Union[int, None] = None,
                  check_val_every_n_epoch: Union[int, None] = None,
                  max_epochs: int = 5000,
+                 t_max: int = 200,
+                 cycles: float = 1,
                  include_background: bool = False,
                  **kwargs
                  ):
@@ -94,6 +96,8 @@ class LitMonai(LightningModule):
         self.patience = patience
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.max_epochs = max_epochs
+        self.t_max = t_max
+        self.cycles = cycles
         # For hyperparameters saving, additional args to log, can be useful to load from checkpoint
         self.__dict__.update(kwargs)
         self.save_hyperparameters(ignore=[
@@ -130,9 +134,11 @@ class LitMonai(LightningModule):
             batch_size=args.batch_size,
             scheduler=args.scheduler,
             warmup_epochs=args.warmup_epochs,
-            patience=args.patience / 2,
+            patience=args.patience_scheduler,
             check_val_every_n_epoch=args.check_val_every_n_epoch,
             max_epochs=args.max_epochs,
+            t_max=args.t_max,
+            cycles=args.cycles,
             include_background=not args.no_include_background,
             **additional_kwargs
         )
@@ -274,12 +280,13 @@ class LitMonai(LightningModule):
             scheduler = WarmupCosineSchedule(
                 optimizer=optimizer,
                 warmup_steps=self.warmup_epochs,
-                t_total=self.max_epochs
+                t_total=self.max_epochs,
+                cycles=self.cycles
             )
         elif self.scheduler == 'cosine':
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer=optimizer,
-                T_max=self.max_epochs
+                T_max=self.t_max
             )
         elif self.scheduler == 'reduce_on_plateau':
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
