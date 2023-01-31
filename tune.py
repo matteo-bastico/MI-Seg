@@ -293,7 +293,8 @@ if __name__ == '__main__':
         # Start to optimization
         study.optimize(
             partial(objective, args),
-            n_trials=args.n_trials
+            n_trials=args.n_trials,
+            timeout=args.timeout
         )
     else:
         storage = JournalStorage(JournalFileStorage(os.path.join(args.default_root_dir, 'optuna',
