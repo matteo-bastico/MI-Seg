@@ -22,7 +22,7 @@ def train_epoch(model, loader, optimizer, criterion, device, scaler, amp=True):
             output = model(data, modality)
             loss = criterion(output, target)
             run_loss(output, target)
-        print(f"Train batch {idx}, loss {loss.item()}")
+        # print(f"Train batch {idx}, loss {loss.item()}")
         # If AMP is active
         if amp:
             scaler.scale(loss).backward()
@@ -77,7 +77,7 @@ def val_epoch(
             loss = criterion(output, target)
             run_loss(output, target)
             # In the print we assume validation batch
-            print(f"Val batch {idx} modality {modality.tolist()}, loss {loss}")
+            # print(f"Val batch {idx} modality {modality.tolist()}, loss {loss}")
             # run_loss.update(loss)
             # Compute accuracy
             # acc_func.update(output, target.int())
@@ -89,14 +89,14 @@ def val_epoch(
             val_output_convert = torch.stack(val_output_convert)
             val_labels_convert = torch.stack(val_labels_convert)
             batch_acc = acc_func(y_pred=val_output_convert, y=val_labels_convert)
-            print(f"Accuracy batch {idx} modality {modality.tolist()}, loss {batch_acc}")
+            # print(f"Accuracy batch {idx} modality {modality.tolist()}, loss {batch_acc}")
             # acc_mod_cumulative.append(batch_acc, modality)
             acc_mod_cumulative.extend(batch_acc, modality)  # Extend is for append a batch-first array
             # Update surface distance
             if surface_distance is not None:
                 batch_surface = surface_distance(y_pred=val_output_convert, y=val_labels_convert)
                 surface_mod_cumulative.extend(batch_surface, modality)
-                print(f"Surface batch {idx} modality {modality.tolist()}, loss {batch_surface}")
+                # print(f"Surface batch {idx} modality {modality.tolist()}, loss {batch_surface}")
             # Update additional metrics is any
             if additional_metrics:
                 for metric in additional_metrics:
@@ -178,7 +178,7 @@ def val_epoch(
     # log dice and surface distance total
     accuracy, not_nans = acc_func.aggregate()
     if logger is not None:
-        print(f"Accuracy per class [tot]: {accuracy.tolist()}")
+        # print(f"Accuracy per class [tot]: {accuracy.tolist()}")
         dict_acc_class = {}
         for c, v in enumerate(accuracy.tolist()):
             dict_acc_class[f"val_total_dice/class{c + include_background_acc}"] = v
@@ -186,7 +186,7 @@ def val_epoch(
     if surface_distance is not None:
         surface, not_nans_surface = surface_distance.aggregate()
         if logger is not None:
-            print(f"Surface per class [tot]: {surface.tolist()}")
+            # print(f"Surface per class [tot]: {surface.tolist()}")
             dict_surf_class = {}
             for c, v in enumerate(accuracy.tolist()):
                 dict_surf_class[f"val_total_surface_distance/class{c + include_background_surf}"] = v
@@ -215,8 +215,10 @@ def log_metric_with_modality(metric_func, label, logger=None, epoch=None, includ
     # This is a workaround for the cuda problem of monai metrics
     metric = metric.cpu()
     mod_metric = mod_metric.cpu()
+    '''
     if logger is not None:
         print(metric, mod_metric)
+    '''
     for m in torch.unique(mod_metric):
         # Select only samples of that modality
         metric_m = metric[mod_metric == m]
@@ -229,7 +231,7 @@ def log_metric_with_modality(metric_func, label, logger=None, epoch=None, includ
         # We have the surface distance per class here
         metric_m = torch.where(not_nans > 0, metric_m.sum(dim=0) / not_nans, t_zero)  # batch average
         if logger is not None:
-            print(f"{label} per class [modality {m}]: {metric_m.tolist()}")
+            # print(f"{label} per class [modality {m}]: {metric_m.tolist()}")
             # Log
             dict_surf_class_modality = {}
             for c, v in enumerate(metric_m.tolist()):
@@ -237,7 +239,7 @@ def log_metric_with_modality(metric_func, label, logger=None, epoch=None, includ
             logger.log(dict_surf_class_modality, epoch)
             # Average surface distance. Note: as in monai we don't account for classes with all nans in the average
             # This can make the average surface distance among modalities different from the total average accuracy
-            print(f"Average {label} [modality {m}]: {torch.nanmean(metric_m[not_nans > 0]).item()}")
+            # print(f"Average {label} [modality {m}]: {torch.nanmean(metric_m[not_nans > 0]).item()}")
             logger.log({f"val_modality{m}_{label}/avg": torch.nanmean(metric_m[not_nans > 0]).item()}, epoch)
     # Version not counting also inf in the mean (for surface)
     '''
