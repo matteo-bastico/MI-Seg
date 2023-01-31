@@ -9,6 +9,7 @@ import torch.distributed as dist
 from argparse import ArgumentParser
 from monai.metrics import LossMetric
 from torch.cuda.amp import GradScaler
+from optuna.samplers import TPESampler
 from monai.transforms import AsDiscrete
 from monai.metrics.meandice import DiceMetric
 from data.multi_modal_pelvic import get_loaders
@@ -265,7 +266,7 @@ if __name__ == '__main__':
             # Removed set_start_method causing DataLoader workers exiting unexpectedly
             #  torch.multiprocessing.set_start_method("spawn", force=True)
             os.environ["MASTER_ADDR"] = "127.0.0.1"
-            os.environ["MASTER_PORT"] = "23456"
+            os.environ["MASTER_PORT"] = "23456" if args.port is None else args.port
             dist.init_process_group(
                 backend="nccl", world_size=args.world_size, rank=args.local_rank
             )
@@ -285,6 +286,8 @@ if __name__ == '__main__':
     if not args.distributed:
         study = optuna.create_study(
             direction="maximize",
+            sampler=TPESampler(),
+            pruner=optuna.pruners.SuccessiveHalvingPruner(),
             # Specify the storage URL here.
             storage="sqlite:///" + os.path.join(args.default_root_dir, 'optuna', args.study_name + ".db"),
             study_name=args.study_name,
@@ -303,6 +306,8 @@ if __name__ == '__main__':
         if args.local_rank == 0:
             study = optuna.create_study(
                 direction="maximize",
+                sampler=TPESampler(),
+                pruner=optuna.pruners.SuccessiveHalvingPruner(),
                 storage=storage,  # Specify the storage URL here.
                 study_name=args.study_name,
                 load_if_exists=True  # Needed if we run parallelized optimization
