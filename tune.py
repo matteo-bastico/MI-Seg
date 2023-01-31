@@ -1,12 +1,12 @@
 import os
+import wandb
 import torch
 import optuna
 
+from pathlib import Path
 from functools import partial
 import torch.distributed as dist
 from argparse import ArgumentParser
-
-import wandb
 from monai.metrics import LossMetric
 from torch.cuda.amp import GradScaler
 from monai.transforms import AsDiscrete
@@ -23,11 +23,55 @@ from utils.parser import add_model_argparse_args, add_data_argparse_args, add_tu
 from utils.training_utils import loss_from_argparse_args, optimizer_from_argparse_args, scheduler_from_argparse_args
 
 
+def save_checkpoint(model, epoch, logdir, filename="model.pt", best_acc=0, optimizer=None, scheduler=None, scaler=None):
+    state_dict = model.state_dict() if not args.distributed else model.module.state_dict()
+    save_dict = {"epoch": epoch, "best_acc": best_acc, "state_dict": state_dict}
+    if optimizer is not None:
+        save_dict["optimizer"] = optimizer.state_dict()
+    if scheduler is not None:
+        save_dict["scheduler"] = scheduler.state_dict()
+    if scaler is not None:
+        save_dict["scaler"] = scaler.state_dict()
+    filename = os.path.join(logdir, filename)
+    torch.save(save_dict, filename)
+    print("Saving checkpoint", filename)
+
+
+def set_trail_config(trial, args):
+    # Batch size = batch_size*patches_training_sample
+    args.batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
+    args.patches_training_sample = trial.suggest_categorical("patches_training_sample", [4, 8, 12, 16])
+    # Suggestion for lr, scheduler and optimizer
+    args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
+    args.reg_weight = trial.suggest_float("reg_weight", 1e-6, 1e-4)
+    if args.scheduler == "warmup_cosine":
+        args.warmup_epochs = trial.suggest_int("warmup_epochs", 50, 200)
+        args.cycles = trial.suggest_int("cycles", 1, 5)
+    elif args.scheduler == "cosine":
+        args.t_max = trial.suggest_int("t_max", 400, args.max_epochs)
+    elif args.scheduler == "reduce_on_plateau":
+        args.patience_scheduler = trial.suggest_int("patience_scheduler", 2, 10)
+    # Model
+    args.feature_size = trial.suggest_categorical("feature_size", [16, 32, 64])
+    if args.model_name == 'unet':
+        args.num_layer = trial.suggest_int("num_layers", 3, 5)
+        # args.num_res_units = trial.suggest_int("num_res_units", 2, 3)
+    elif args.model_name == "unetr":
+        args.num_heads = trial.suggest_categorical("num_heads", [8, 12, 16])
+        # args.hidden_size = trial.suggest_categorical("hidden_size", [512, 768, 1024])
+    return args
+
+
 def objective(args, single_trial):
     if args.distributed:
         trial = optuna.integration.TorchDistributedTrial(single_trial)
     else:
         trial = single_trial
+    args = set_trail_config(trial, args)
+    # Folder to save model
+    model_logdir = os.path.join(args.default_root_dir, args.study_name, str(trial.number))
+    # Create folder if not exists
+    Path(model_logdir).mkdir(parents=True, exist_ok=True)
     # Start wandb logger if local rank is 0
     logger = None
     if args.local_rank == 0:
@@ -38,19 +82,20 @@ def objective(args, single_trial):
             group=args.study_name,
             mode=args.wandb_mode,
             id=str(trial.number),
+            config=args  # Here config of experiment hyper-parameters
         )
     model = model_from_argparse_args(args).to(args.device)
     if args.distributed:
         model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
     # Overall dice metric
     dice = DiceMetric(
-        # include_background=not args.no_include_background,  # In the metric background is not relevant
+        include_background=not args.no_include_background,  # In the metric background is not relevant
         reduction='mean_batch',  # This will give the accuracy per class in averaged on batches
         get_not_nans=True  # Exclude nans from computation
     )
     # Define surface distance metric
     surface_distance = SurfaceDistanceMetric(
-        # include_background=not args.no_include_background,
+        include_background=not args.no_include_background,
         symmetric=True,
         distance_metric='euclidean',
         reduction='mean_batch',  # This will give the accuracy per class in averaged on batches
@@ -59,7 +104,7 @@ def objective(args, single_trial):
     # Add generalized dice
     additional_metrics = [
         GeneralizedDiceScore(
-            # include_background=not args.no_include_background,
+            include_background=not args.no_include_background,
         )
     ]
     # Post-processing for accuracy computation
@@ -86,6 +131,7 @@ def objective(args, single_trial):
     if args.amp:
         scaler = GradScaler()
     # Train and validation
+    best_acc = 0.0
     for epoch in range(1, args.max_epochs + 1):
         # Log learning rate
         if logger is not None and scheduler is not None:
@@ -141,6 +187,29 @@ def objective(args, single_trial):
                 print(f"Val Epoch {epoch}, dice accuracy {accuracy}")
                 print(f"Val Epoch {epoch}, surface {surface}")
                 print(f"Val Epoch {epoch}, generalized dice {other_metrics[0]}")
+                # Save model
+                if accuracy > best_acc:
+                    print("New best ({:.6f} --> {:.6f}). ".format(best_acc, accuracy))
+                    best_acc = accuracy
+                    model_name = 'best.pt'
+                else:
+                    model_name = 'last.pt'
+                save_checkpoint(
+                    model,
+                    epoch,
+                    model_logdir,
+                    model_name,
+                    best_acc=best_acc,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    scaler=scaler
+                )
+                # We don't load for now due to memory limitation
+                '''
+                artifact = wandb.Artifact(model_name.replace('.pt', ''), type='model')
+                artifact.add_file(os.path.join(model_logdir, model_name))
+                logger.log_artifact(artifact)
+                '''
             # Step scheduler here if Reduce on plateau
             if scheduler is not None:
                 if isinstance(scheduler, ReduceLROnPlateau):
@@ -161,7 +230,7 @@ def objective(args, single_trial):
             '''
     if logger is not None:
         logger.finish()
-    return accuracy
+    return best_acc
 
 
 if __name__ == '__main__':
@@ -198,7 +267,7 @@ if __name__ == '__main__':
         args.distributed = False
         args.local_rank = 0
         args.device = "cuda:0" if torch.cuda.is_available() and not args.no_gpu else "cpu"
-    print(args)
+    # print(args)
     # Create and start optuna study with defined storage method
     # JournalFileStorage is suggested if a database cannot be set up in NFS
     # It is also suggested to avoid SQLite

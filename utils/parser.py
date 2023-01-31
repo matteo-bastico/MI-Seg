@@ -74,7 +74,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--warmup_epochs", default=50, type=int, help="number of warmup epochs")
     group.add_argument("--patience_scheduler", default=3, type=int, help="patient for reduce on plateau scheduler")
     group.add_argument("--t_max", default=200, type=int, help="maximum number of iterations for cosine annealing")
-    group.add_argument("--cycles", default=1, type=float, help="cosine cycles parameter, for WarmupCosineSchedule")
+    group.add_argument("--cycles", default=1, type=int, help="cosine cycles parameter, for WarmupCosineSchedule")
     # Inference
     group = parser.add_argument_group("inference")
     group.add_argument("--infer_overlap", default=0.5, type=float, help="sliding window inference overlap")
