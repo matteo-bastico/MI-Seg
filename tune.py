@@ -44,27 +44,24 @@ def objective(args, single_trial):
         model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
     # Overall dice metric
     dice = DiceMetric(
-        include_background=not args.no_include_background,  # In the metric background is not relevant
+        # include_background=not args.no_include_background,  # In the metric background is not relevant
         reduction='mean_batch',  # This will give the accuracy per class in averaged on batches
         get_not_nans=True  # Exclude nans from computation
     )
     # Define surface distance metric
     surface_distance = SurfaceDistanceMetric(
-        include_background=not args.no_include_background,
+        # include_background=not args.no_include_background,
         symmetric=True,
         distance_metric='euclidean',
         reduction='mean_batch',  # This will give the accuracy per class in averaged on batches
         get_not_nans=True  # Exclude nans from computation
     )
-    # Skip this for problem with CUDA
-    '''
     # Add generalized dice
     additional_metrics = [
         GeneralizedDiceScore(
-            include_background=not args.no_include_background,
+            # include_background=not args.no_include_background,
         )
     ]
-    '''
     # Post-processing for accuracy computation
     post_label = AsDiscrete(to_onehot=args.out_channels)
     post_pred = AsDiscrete(argmax=True, to_onehot=args.out_channels)
@@ -128,7 +125,7 @@ def objective(args, single_trial):
                 model_inferer=model_inferer,
                 amp=args.amp,
                 surface_distance=surface_distance,
-                # additional_metrics=additional_metrics,
+                additional_metrics=additional_metrics,
                 logger=logger,
                 epoch=epoch
             )

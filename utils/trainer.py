@@ -86,6 +86,9 @@ def val_epoch(
             val_labels_convert = [post_label(val_label_tensor) for val_label_tensor in val_labels_list]
             val_outputs_list = decollate_batch(output)
             val_output_convert = [post_pred(val_pred_tensor) for val_pred_tensor in val_outputs_list]
+            # Back to [BCHWD] for metrics computation
+            val_output_convert = torch.stack(val_output_convert)
+            val_labels_convert = torch.stack(val_labels_convert)
             batch_acc = acc_func(y_pred=val_output_convert, y=val_labels_convert)
             print(f"Accuracy batch {idx} modality {modality.tolist()}, loss {batch_acc}")
             # acc_mod_cumulative.append(batch_acc, modality)
@@ -98,10 +101,14 @@ def val_epoch(
             # Update additional metrics is any
             if additional_metrics:
                 for metric in additional_metrics:
-                    metric(y_pred=val_output_convert, y=val_labels_convert)
+                    # .cpu() is a workaround for monai issue
+                    metric(y_pred=val_output_convert.cpu(), y=val_labels_convert.cpu())
 
     # Here I will have a Tensor of size [N_batches, N_sample_per_batch, N_classes]
     acc, mod = acc_mod_cumulative.get_buffer()
+    # This is a workaround for the cuda problem of monai metrics
+    surf = acc.cpu()
+    mod_surf = mod.cpu()
     # Flatten on first dim to have [N_samples, N_classes] -> Not needed with extend instead of append
     # acc = acc.flatten(end_dim=1)
     # mod = mod.flatten(end_dim=1)
@@ -130,6 +137,9 @@ def val_epoch(
             logger.log({f"val_modality{m}_dice/avg": torch.nanmean(acc_m[not_nans > 0]).item()}, epoch)
     if surface_distance is not None:
         surf, mod_surf = surface_mod_cumulative.get_buffer()
+        # This is a workaround for the cuda problem of monai metrics
+        surf = surf.cpu()
+        mod_surf = mod_surf.cpu()
         if logger is not None:
             print(surf, mod_surf)
         for m in torch.unique(mod_surf):
