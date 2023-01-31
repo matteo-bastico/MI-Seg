@@ -39,8 +39,8 @@ def save_checkpoint(model, epoch, logdir, filename="model.pt", best_acc=0, optim
 
 def set_trail_config(trial, args):
     # Batch size = batch_size*patches_training_sample
-    args.batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
-    args.patches_training_sample = trial.suggest_categorical("patches_training_sample", [4, 8, 12, 16])
+    args.batch_size = trial.suggest_categorical("batch_size", [2, 4])
+    args.patches_training_sample = trial.suggest_categorical("patches_training_sample", [1, 2, 4])
     # Suggestion for lr, scheduler and optimizer
     args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
     args.reg_weight = trial.suggest_float("reg_weight", 1e-6, 1e-4)
@@ -52,9 +52,16 @@ def set_trail_config(trial, args):
     elif args.scheduler == "reduce_on_plateau":
         args.patience_scheduler = trial.suggest_int("patience_scheduler", 2, 10)
     # Model
-    args.feature_size = trial.suggest_categorical("feature_size", [16, 32, 64])
+    args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
     if args.model_name == 'unet':
-        args.num_layer = trial.suggest_int("num_layers", 3, 5)
+        args.num_layers = trial.suggest_int("num_layers", 3, 5)
+        # Change strides based on nulber of layers
+        if args.num_layers == 3:
+            args.strides = [2, 2]
+        elif args.num_layers == 4:
+            args.strides = [2, 2, 2]
+        elif args.num_layers == 5:
+            args.strides = [2, 2, 2, 2]
         # args.num_res_units = trial.suggest_int("num_res_units", 2, 3)
     elif args.model_name == "unetr":
         args.num_heads = trial.suggest_categorical("num_heads", [8, 12, 16])
@@ -193,6 +200,7 @@ def objective(args, single_trial):
                     best_acc = accuracy
                     model_name = 'best.pt'
                 else:
+                    # Last model not best, useful to restart training from last checkpoint if it is not best
                     model_name = 'last.pt'
                 save_checkpoint(
                     model,
@@ -268,6 +276,8 @@ if __name__ == '__main__':
         args.local_rank = 0
         args.device = "cuda:0" if torch.cuda.is_available() and not args.no_gpu else "cpu"
     # print(args)
+    # Activate benchmarking for faster training
+    torch.backends.cudnn.benchmark = True
     # Create and start optuna study with defined storage method
     # JournalFileStorage is suggested if a database cannot be set up in NFS
     # It is also suggested to avoid SQLite
@@ -298,7 +308,8 @@ if __name__ == '__main__':
             )
             study.optimize(
                 partial(objective, args),
-                n_trials=args.n_trials
+                n_trials=args.n_trials,
+                timeout=args.timeout
             )
         else:
             for _ in range(args.n_trials):

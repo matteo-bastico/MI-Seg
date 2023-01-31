@@ -33,8 +33,6 @@ def train_epoch(model, loader, optimizer, criterion, device, scaler, amp=True):
             optimizer.step()
         # Update distributed running loss
         # run_loss.update(loss)
-        # TODO: remove this break
-        break
     # Total loss
     epoch_loss = run_loss.aggregate(reduction='mean').item()
     # Important to reset and free memory
