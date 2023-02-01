@@ -39,15 +39,16 @@ def save_checkpoint(model, epoch, logdir, filename="model.pt", best_acc=0, optim
 
 
 def set_trail_config(trial, args):
-    # Batch size = batch_size*patches_training_sample
-    args.batch_size = trial.suggest_categorical("batch_size", [2, 4])
-    args.patches_training_sample = trial.suggest_categorical("patches_training_sample", [1, 2, 4])
+    # Batch size = batch_size*patches_training_sample, fix these to max, see google paper
+    # args.batch_size = trial.suggest_categorical("batch_size", [2, 4])
+    # args.patches_training_sample = trial.suggest_categorical("patches_training_sample", [1, 2, 4])
     # Suggestion for lr, scheduler and optimizer
     args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
     args.reg_weight = trial.suggest_float("reg_weight", 1e-6, 1e-4)
     if args.scheduler == "warmup_cosine":
-        args.warmup_epochs = trial.suggest_int("warmup_epochs", 50, 200)
-        args.cycles = trial.suggest_int("cycles", 1, 5)
+        args.warmup_epochs = trial.suggest_int("warmup_epochs", 50, 100)
+        # We try with just one cycle if it is smoother
+        # args.cycles = trial.suggest_int("cycles", 1, 4)
     elif args.scheduler == "cosine":
         args.t_max = trial.suggest_int("t_max", 400, args.max_epochs)
     elif args.scheduler == "reduce_on_plateau":
@@ -94,7 +95,10 @@ def objective(args, single_trial):
         )
     model = model_from_argparse_args(args).to(args.device)
     if args.distributed:
-        model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
+        find_unused_parameters = args.vit_norm_name == "instance_cond" or args.encoder_norm_name == "instance_cond" or \
+                                 args.decoder_norm_name == "instance_cond"
+        model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank,
+                    find_unused_parameters=find_unused_parameters)
     # Overall dice metric
     dice = DiceMetric(
         include_background=not args.no_include_background,  # In the metric background is not relevant
@@ -307,7 +311,7 @@ if __name__ == '__main__':
             study = optuna.create_study(
                 direction="maximize",
                 sampler=TPESampler(),
-                pruner=optuna.pruners.SuccessiveHalvingPruner(),
+                pruner=optuna.pruners.SuccessiveHalvingPruner(min_resource=4, reduction_factor=3),
                 storage=storage,  # Specify the storage URL here.
                 study_name=args.study_name,
                 load_if_exists=True  # Needed if we run parallelized optimization
