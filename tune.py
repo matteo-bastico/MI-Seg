@@ -291,9 +291,12 @@ if __name__ == '__main__':
         study = optuna.create_study(
             direction="maximize",
             sampler=TPESampler(),
-            pruner=optuna.pruners.SuccessiveHalvingPruner(),
+            # min_resources is in steps, since we pass as step the num of epochs we have to put here proportional to
+            # check_val_every_n_epoch
+            pruner=optuna.pruners.SuccessiveHalvingPruner(min_resource=4*args.check_val_every_n_epoch,
+                                                          reduction_factor=3),
             # Specify the storage URL here.
-            storage="sqlite:///" + os.path.join(args.default_root_dir, 'optuna', args.study_name + ".db"),
+            storage="sqlite:///" + os.path.join(args.default_root_dir, 'optuna', args.storage_name + ".db"),
             study_name=args.study_name,
             load_if_exists=True  # Needed if we run parallelized optimization
         )
@@ -305,13 +308,16 @@ if __name__ == '__main__':
         )
     else:
         storage = JournalStorage(JournalFileStorage(os.path.join(args.default_root_dir, 'optuna',
-                                                                 args.study_name + ".log")))
+                                                                 args.storage_name + ".log")))
         study = None
         if args.local_rank == 0:
             study = optuna.create_study(
                 direction="maximize",
                 sampler=TPESampler(),
-                pruner=optuna.pruners.SuccessiveHalvingPruner(min_resource=4, reduction_factor=3),
+                # min_resources is in steps, since we pass as step the num of epochs we have to put here proportional to
+                # check_val_every_n_epoch
+                pruner=optuna.pruners.SuccessiveHalvingPruner(min_resource=4*args.check_val_every_n_epoch,
+                                                              reduction_factor=3),
                 storage=storage,  # Specify the storage URL here.
                 study_name=args.study_name,
                 load_if_exists=True  # Needed if we run parallelized optimization

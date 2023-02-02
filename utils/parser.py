@@ -132,4 +132,5 @@ def add_tune_argparse_args(parser: ArgumentParser):
     group.add_argument("--no_amp", action="store_true", help="not use GPU on single training")
     group.add_argument("--default_root_dir", default="./experiments", type=str, help="not use GPU on single training")
     group.add_argument("--port", default="23456", type=str, help="port for distributed backend")
+    group.add_argument("--storage_name", default="MI-Seg", type=str, help="name for optuna storage")
     return parser
