@@ -46,7 +46,7 @@ def set_trail_config(trial, args):
     args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
     args.reg_weight = trial.suggest_float("reg_weight", 1e-6, 1e-4)
     if args.scheduler == "warmup_cosine":
-        args.warmup_epochs = trial.suggest_int("warmup_epochs", 50, 100)
+        args.warmup_epochs = trial.suggest_int("warmup_epochs", 0, 3*args.check_val_every_n_epoch)
         # We try with just one cycle if it is smoother
         # args.cycles = trial.suggest_int("cycles", 1, 4)
     elif args.scheduler == "cosine":
