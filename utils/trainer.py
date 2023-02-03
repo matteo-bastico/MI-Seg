@@ -188,7 +188,7 @@ def val_epoch(
         if logger is not None:
             # print(f"Surface per class [tot]: {surface.tolist()}")
             dict_surf_class = {}
-            for c, v in enumerate(accuracy.tolist()):
+            for c, v in enumerate(surface.tolist()):
                 dict_surf_class[f"val_total_surface_distance/class{c + include_background_surf}"] = v
             logger.log(dict_surf_class, epoch)
         surface_distance.reset()
