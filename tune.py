@@ -43,7 +43,7 @@ def set_trail_config(trial, args):
     # args.batch_size = trial.suggest_categorical("batch_size", [2, 4])
     # args.patches_training_sample = trial.suggest_categorical("patches_training_sample", [1, 2, 4])
     # Suggestion for lr, scheduler and optimizer
-    args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
+    args.lr = trial.suggest_float("lr", args.min_lr, args.max_lr, log=True)
     args.reg_weight = trial.suggest_float("reg_weight", 1e-6, 1e-4)
     if args.scheduler == "warmup_cosine":
         args.warmup_epochs = trial.suggest_int("warmup_epochs", 0, 3*args.check_val_every_n_epoch)
@@ -281,6 +281,9 @@ if __name__ == '__main__':
         args.local_rank = 0
         args.device = "cuda:0" if torch.cuda.is_available() and not args.no_gpu else "cpu"
     # print(args)
+    # Set device to avoid Illegal memory access
+    if args.device != "cpu":
+        torch.cuda.set_device(args.device)
     # Activate benchmarking for faster training
     torch.backends.cudnn.benchmark = True
     # Create and start optuna study with defined storage method
