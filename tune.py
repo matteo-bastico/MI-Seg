@@ -90,7 +90,7 @@ def objective(args, single_trial):
             entity=args.entity,
             group=args.study_name,
             mode=args.wandb_mode,
-            id=str(trial.number),
+            id=args.study_name + "_" + str(trial.number),
             config=args  # Here config of experiment hyper-parameters
         )
     model = model_from_argparse_args(args).to(args.device)
