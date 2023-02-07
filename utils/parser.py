@@ -34,12 +34,15 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--decoder_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
     group.add_argument("--num_groups", type=int, default=4, help="For group norm")
     group.add_argument("--num_styles", type=int, default=2, help="For instance_cond norm")
-    '''
     # Swin-UNETR exclusive args
-    parser.add_argument("--dropout_path_rate", default=0.0, type=float, help="drop path rate")
-    parser.add_argument("--attn_drop_rate", default=0.0, type=float, help="attn drop rate")
-    parser.add_argument("--use_checkpoint", action="store_true", help="use gradient checkpointing to save memory")
-    '''
+    group.add_argument("--dropout_path_rate", default=0.0, type=float, help="drop path rate")
+    group.add_argument("--attn_drop_rate", default=0.0, type=float, help="attn drop rate")
+    group.add_argument("--depth_swin_block", default=2, type=int, help="depth of swin-transformer block")
+    group.add_argument("--use_checkpoint", action="store_true", help="use gradient checkpointing to save memory")
+    group.add_argument('--downsample', default="merging",
+                       help='downsample function in swin-transformer ("merging" or "mergingv2")', type=str)
+    group.add_argument("--no_normalize_swin", action="store_true", help="not use normalization in swin transformer"
+                                                                        "projections")
     # Unet specific parameters
     group.add_argument("--num_layers", type=int, default=4, help="UNet number of layers")
     group.add_argument('--strides', default=[2, 2, 2], nargs='+',

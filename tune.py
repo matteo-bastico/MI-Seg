@@ -14,7 +14,7 @@ from monai.transforms import AsDiscrete
 from monai.metrics.meandice import DiceMetric
 from data.multi_modal_pelvic import get_loaders
 from utils.trainer import train_epoch, val_epoch
-from networks.utils import model_from_argparse_args
+from networks.utils.utils import model_from_argparse_args
 from monai.inferers import sliding_window_inference
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -54,8 +54,9 @@ def set_trail_config(trial, args):
     elif args.scheduler == "reduce_on_plateau":
         args.patience_scheduler = trial.suggest_int("patience_scheduler", 2, 10)
     # Model
-    args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
+
     if args.model_name == 'unet':
+        args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
         args.num_layers = trial.suggest_int("num_layers", 3, 5)
         # Change strides based on nulber of layers
         if args.num_layers == 3:
@@ -66,8 +67,12 @@ def set_trail_config(trial, args):
             args.strides = [2, 2, 2, 2]
         # args.num_res_units = trial.suggest_int("num_res_units", 2, 3)
     elif args.model_name == "unetr":
+        args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
         args.num_heads = trial.suggest_categorical("num_heads", [8, 12, 16])
         # args.hidden_size = trial.suggest_categorical("hidden_size", [512, 768, 1024])
+    elif args.model_name == 'swin_unetr':
+        args.feature_size = trial.suggest_categorical("feature_size", [12, 24, 36])  # Divisible by 12
+        args.num_heads = trial.suggest_categorical("num_heads", [2, 3, 4])  # Number of heads first layer
     return args
 
 

@@ -1,8 +1,16 @@
 import torch
 import warnings
 
+from monai.utils import optional_import
 from networks.nets.unetr import UNETR
 from networks.nets.unet import UNet
+from networks.nets.swin_unetr import SwinUNETR
+
+rearrange, _ = optional_import("einops", name="rearrange")
+
+__all__ = [
+    "model_from_argparse_args",
+]
 
 
 def model_from_argparse_args(args):
@@ -11,6 +19,8 @@ def model_from_argparse_args(args):
         model = UNETR.from_argparse_args(args)
     elif model_name == 'unet':
         model = UNet.from_argparse_args(args)
+    elif model_name == 'swin_unetr':
+        model = SwinUNETR.from_argparse_args(args)
     else:
         raise ValueError("Model {} not implemented. Please chose another model.".format(model_name))
 
