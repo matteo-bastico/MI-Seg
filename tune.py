@@ -165,7 +165,8 @@ def objective(args, single_trial):
             criterion,
             args.device,
             scaler,
-            amp=args.amp
+            amp=args.amp,
+            iters_to_accumulate=args.iters_to_accumulate
         )
         # Step the scheduler, if not Reduce On Plateau
         if scheduler is not None:

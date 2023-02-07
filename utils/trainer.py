@@ -4,12 +4,15 @@ import torch
 from torch.cuda.amp import autocast
 from monai.data import decollate_batch
 from monai.metrics import LossMetric, Cumulative
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-def train_epoch(model, loader, optimizer, criterion, device, scaler, amp=True):
+def train_epoch(model, loader, optimizer, criterion, device, scaler, amp=True, iters_to_accumulate=1):
     model.train()
     start_time = time.time()
     run_loss = LossMetric(loss_fn=criterion)
+    # Added zero grad here
+    optimizer.zero_grad(set_to_none=True)  # set_to_none=True here can modestly improve performance
     for idx, batch in enumerate(loader):
         data, target = batch["image"], batch["label"]
         data, target = data.to(device), target.to(device)
@@ -17,20 +20,53 @@ def train_epoch(model, loader, optimizer, criterion, device, scaler, amp=True):
         if "modality" in batch.keys():
             modality = batch["modality"]
             modality = modality.to(device)
-        optimizer.zero_grad()
-        with autocast(enabled=amp):
-            output = model(data, modality)
-            loss = criterion(output, target)
-            run_loss(output, target)
-        # print(f"Train batch {idx}, loss {loss.item()}")
-        # If AMP is active
-        if amp:
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+        # optimizer.zero_grad()  # Moved after grad accumulation
+        if (idx + 1) % iters_to_accumulate == 0 or idx + 1 == len(loader):
+            with autocast(enabled=amp):
+                output = model(data, modality)
+                # You may wish to divide loss by iters_to_accumulate to average
+                # across the effective (accumulated) global batch.
+                loss = criterion(output, target) / iters_to_accumulate
+                run_loss(output, target)
+            # print(f"Train batch {idx}, loss {loss.item()}")
+            # If AMP is active
+            if amp:
+                scaler.scale(loss).backward()
+                # Grads DO match across ranks at this point, ready to step
+                scaler.step(optimizer)
+                # Only call scaler.update() for iterations where we actually step()ed,
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)  # set_to_none=True here can modestly improve performance
+            else:
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)  # set_to_none=True here can modestly improve performance
+        # Here accumulate gradient
         else:
-            loss.backward()
-            optimizer.step()
+            # If is DDP we need to activate the no_sync to correctly accumulate gradient
+            if isinstance(model, DDP):
+                # We're not stepping this iteration, so use no_sync to prevent DDP allreduces.
+                # It appears we need to run forward and backward under no_sync()
+                # to get the right no-allreduce behavior.
+                with model.no_sync():
+                    with autocast(enabled=amp):
+                        output = model(data, modality)
+                        loss = criterion(output, target) / iters_to_accumulate
+                        run_loss(output, target)
+                    if amp:
+                        scaler.scale(loss).backward()
+                    else:
+                        loss.backward()
+            else:
+                # No need to de-sync model if not DDP
+                with autocast(enabled=amp):
+                    output = model(data, modality)
+                    loss = criterion(output, target) / iters_to_accumulate
+                    run_loss(output, target)
+                if amp:
+                    scaler.scale(loss).backward()
+                else:
+                    loss.backward()
         # Update distributed running loss
         # run_loss.update(loss)
     # Total loss
