@@ -128,6 +128,7 @@ def main(args):
     model = model_from_argparse_args(args)
     model_weights = checkpoint["state_dict"]
     model.load_state_dict(model_weights)
+    model = model.to(args.device)
     # Load test dataloader
     args.test_mode = True
     test_loader = get_loaders(args)
