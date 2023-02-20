@@ -8,7 +8,7 @@ from monai.metrics import LossMetric, Cumulative
 from monai.transforms import AsDiscrete
 from monai.metrics.meandice import DiceMetric
 from data.multi_modal_pelvic import get_loaders
-from networks.utils import model_from_argparse_args
+from networks.utils.utils import model_from_argparse_args
 from monai.inferers import sliding_window_inference
 from monai.metrics import SurfaceDistanceMetric
 from utils.parser import add_model_argparse_args, add_data_argparse_args, add_tune_argparse_args
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", default="Test_unet/3hs4d1wo/checkpoints/5-6.ckpt", type=str, help="Checkpoint")
     args = parser.parse_args()
     args.device = "cuda:0" if torch.cuda.is_available() and not args.no_gpu else "cpu"
-    args.distributed=False
+    args.distributed = False
     if args.device != "cpu":
         torch.cuda.set_device(args.device)
     main(args)
