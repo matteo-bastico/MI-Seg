@@ -43,6 +43,7 @@ def add_model_argparse_args(parser: ArgumentParser):
                        help='downsample function in swin-transformer ("merging" or "mergingv2")', type=str)
     group.add_argument("--no_normalize_swin", action="store_true", help="not use normalization in swin transformer"
                                                                         "projections")
+    group.add_argument("--pre_swin", type=str, default="", help="Path for pretrained Swin-UNETR")
     # Unet specific parameters
     group.add_argument("--num_layers", type=int, default=4, help="UNet number of layers")
     group.add_argument('--strides', default=[2, 2, 2], nargs='+',
