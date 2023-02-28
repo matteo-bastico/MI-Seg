@@ -12,7 +12,7 @@ from monai.transforms import AsDiscrete
 from monai.utils.enums import MetricReduction
 from pytorch_lightning import LightningModule
 from monai.inferers import sliding_window_inference
-from networks.utils import model_from_argparse_args
+from networks.utils.utils import model_from_argparse_args
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 
 

@@ -131,6 +131,7 @@ dmypy.json
 # Slurm 
 *.slurm
 
+*.ipynb
 #custom
 /dataset/MultiModalPelvic/data/**
 /wandb/

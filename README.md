@@ -30,8 +30,8 @@
 <h3 align="center">MI-Seg</h3>
 
   <p align="center">
-    MI-Seg is a framework based on <a href="https://github.com/Project-MONAI/MONAI">MONAI</a> libray for Modality 
-Independent clinical images Segmentation using Conditional Models.  
+    MI-Seg is a framework based on <a href="https://github.com/Project-MONAI/MONAI">MONAI</a> libray for Cross-Modality 
+clinical images Segmentation using Conditional Models and Interleaved Training.  
     <br />
     <a href="https://github.com/matteo-bastico/MI-Seg"><strong>Explore the docs »</strong></a>
     <br />
@@ -104,6 +104,8 @@ Our released implementation is tested on:
 * PyTorch 1.13.1 and PyTorch Lightning 1.8.6
 * Ray 2.2.0
 * NVIDIA CUDA 11.7
+* Monai 1.1.0
+* Optuna 3.1.0
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -157,15 +159,58 @@ You should end up with a similar data structure (sub-folders are not represented
   │   │   └── T2.nii.gz
   │   │   └── T2_N4.nii.gz
   │   ...
+  ├── CT.json
+  ├── MR.json
+  ...
   ```
+
+The splits we used for train/validation/test are provided in `CT.json` and `MR.json`.
 ### Training
- 
+To train a model you can use the `train.py` script provided. Single training are based on PyTorch Lightning and 
+all the Trainer arguments can be passed to the script 
+(see [here](https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html)). Additionally, we provide model, 
+data and logger-specific arguments. To have a full list of the possible arguments execute `python train.py --help`.
+
+An example of C-Swin-UNETR training on single GPU is shown in the following
+```
+python train.py --model_name=swin_unetr --out_channels=6 --feature_size=48 --num_heads=3 --accelerator=gpu --devices=1 --max_epochs=2500 --encoder_norm_name=instance_cond --vit_norm_name=instance_cond --lr=1e-4 --batch_size=1 --patches_training_sample=1
+``` 
+
+The available models are unet, unetr and swin_unetr and pre_swin_unetr (in this case the [pretrained model](https://github.com/Project-MONAI/MONAI-extra-test-data/releases/download/0.8.1/model_swinvit.pt) of monai
+must be provided as `--pre_swin`. 
+
+Furthermore, we use [WandB](https://wandb.ai/site) to log the experiments and specifications can be set as arguments. 
+In the previous example wandb will run in online mode, so you need to provided login and API key. To change wandb mode set 
+`wandb_mode=offline`.
+
+`Note:` AMP (`--no_amp`) should be disabled with checkpointing to save memory during training of Swin_Unetr based models (`--use_checkpoint`).
 
 ### Testing 
-Our pre-trained models can be downloaded [here](drive)
+Our pre-trained models can be downloaded [here](drive) and tested with the `test.py` script. The path of the model weights 
+should be provided as `--checkpoint` (note that the model weight should be under the `state_dict` key). 
+
+Example:
+
+```
+python test.py --out_channels=6 --model_name=swin_unetr --num_workers=2 --feature_size=48  --num_heads=3 --encoder_norm_name=instance_cond --vit_norm_name=instance_cond --checkpoint=experiments/<path>
+```
 
 ### Hyper-parameters Optimization
 
+Hyper-parameters optimization is based on [Optuna](https://optuna.org/). For the moment, the script supports automatic setup of distributed 
+tuning ONLY on Slurm environments. Therefore, it needs to be adapted by the user to run in different multi-GPUs enviroments.
+
+The hyper-parameters grid is set in automatic for each model as stated in our paper and the tuning can be started as in the following. 
+The script will run 10 trials, with TPE optimizer and ASHA pruner, and save the in the `MI-Seg.log` log file (if Slurm) or `MI-Seg.sqlite` (if not Slurm).
+
+```
+python -u tune.py --num_workers=2 --out_channels=6 --no_include_background --criterion=generalized_dice_focal --scheduler=warmup_cosine --model_name=swin_unetr --n_trials=10 --study_name=c-swin-unetr --max_epochs=2500 --check_val_every_n_epoch=50 --batch_size=1 --patches_training_sample=4 --iters_to_accumulate=4 --cycles=0.5 --storage_name=MI-Seg --min_lr=1e-5 --max_lr=1e-3 --vit_norm_name=instance_cond --encoder_norm_name=instance_cond  --port=23456
+```
+
+The script can be run multiple time with the same `--storage_name` in order to continue a previous tuning.
+
+To open log files dashboards not stored as RDB, we provide the `utils/run_server.py --path=<storage>` script.
+The dashboard of our tuning is available at `experiments/optuna/MI-Seg.log`
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -174,8 +219,8 @@ Our pre-trained models can be downloaded [here](drive)
 <!-- ROADMAP -->
 ## Roadmap
 
-- [ ] Add here future steps
-- [ ] Step 2
+- [ ] Implement LN for convolutional layers of Monai (testing purposes)
+- [ ] Implement distributed tuning on not-Slurm environment
 <!--
 - [ ] Feature 2
 - [ ] Feature 3
