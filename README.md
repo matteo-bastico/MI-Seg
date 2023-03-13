@@ -210,7 +210,11 @@ python -u tune.py --num_workers=2 --out_channels=6 --no_include_background --cri
 The script can be run multiple time with the same `--storage_name` in order to continue a previous tuning.
 
 To open log files dashboards not stored as RDB, we provide the `utils/run_server.py --path=<storage>` script.
-The dashboard of our tuning is available at `experiments/optuna/MI-Seg.log`
+The dashboard of our tuning presented in the paper is available at `experiments/optuna/MI-Seg.log` and can be open with
+
+```
+python utils/run_server.py --path=experiments/optuna/MI-Seg.log
+```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 

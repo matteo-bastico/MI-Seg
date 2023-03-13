@@ -21,16 +21,16 @@
     {
       "image": "data/2_05_P/Deformed_CT.nii.gz",
       "label": "data/2_05_P/labels.nii.gz"
+    },
+    {
+      "image": "data/2_04_P/Deformed_CT.nii.gz",
+      "label": "data/2_04_P/labels.nii.gz"
     }
   ],
   "training": [
     {
       "image": "data/2_06_P/Deformed_CT.nii.gz",
       "label": "data/2_06_P/labels.nii.gz"
-    },
-    {
-      "image": "data/2_04_P/Deformed_CT.nii.gz",
-      "label": "data/2_04_P/labels.nii.gz"
     },
     {
       "image": "data/1_08_P/Deformed_CT.nii.gz",
@@ -53,10 +53,6 @@
       "label": "data/3_01_P/labels.nii.gz"
     },
     {
-      "image": "data/1_05_P/Deformed_CT.nii.gz",
-      "label": "data/1_05_P/labels.nii.gz"
-    },
-    {
       "image": "data/2_03_P/Deformed_CT.nii.gz",
       "label": "data/2_03_P/labels.nii.gz"
     },
@@ -71,10 +67,6 @@
     {
       "image": "data/1_04_P/Deformed_CT.nii.gz",
       "label": "data/1_04_P/labels.nii.gz"
-    },
-    {
-      "image": "data/1_02_P/Deformed_CT.nii.gz",
-      "label": "data/1_02_P/labels.nii.gz"
     },
     {
       "image": "data/1_01_P/Deformed_CT.nii.gz",
@@ -93,6 +85,14 @@
     {
       "image": "data/3_03_P/Deformed_CT.nii.gz",
       "label": "data/3_03_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_02_P/Deformed_CT.nii.gz",
+      "label": "data/1_02_P/labels.nii.gz"
+    },
+    {
+      "image": "data/1_05_P/Deformed_CT.nii.gz",
+      "label": "data/1_05_P/labels.nii.gz"
     }
   ]
 }
