@@ -134,6 +134,7 @@ dmypy.json
 *.ipynb
 #custom
 /dataset/MultiModalPelvic/data/**
+/dataset/CT-ORG
 /wandb/
 /dataset/MultiModalPelvic/notebooks/
 /tests/
