@@ -12,7 +12,7 @@ from pytorch_lightning.utilities.argparse import from_argparse_args
 
 class MultiModalPelvicDataModule(LightningDataModule):
     def __init__(self,
-                 data_dir: str,
+                 data_dirs: List[str],
                  json_lists: List[str],
                  space_x: float,
                  space_y: float,
@@ -32,8 +32,8 @@ class MultiModalPelvicDataModule(LightningDataModule):
                  num_workers: int = 8,
                  ):
         super().__init__()
-        self.data_dir = data_dir
-        self.datalist_jsons = [os.path.join(data_dir, json_list) for json_list in json_lists]
+        self.data_dirs = data_dirs
+        self.datalist_jsons = [os.path.join(data_dir, json_list) for data_dir, json_list in zip(data_dirs, json_lists)]
         self.train_transforms = transforms.Compose(
             [
                 transforms.LoadImaged(keys=["image", "label"]),
@@ -129,8 +129,8 @@ class MultiModalPelvicDataModule(LightningDataModule):
                 datalist_json,
                 True,
                 "training",
-                base_dir=self.data_dir
-            ) for datalist_json in self.datalist_jsons]
+                base_dir=data_dir
+            ) for data_dir, datalist_json in zip(self.data_dirs, self.datalist_jsons)]
             if self.use_normal_dataset:
                 train_datasets = [data.Dataset(
                     data=datalist,
@@ -159,8 +159,8 @@ class MultiModalPelvicDataModule(LightningDataModule):
             datalist_json,
             True,
             split,
-            base_dir=self.data_dir
-        ) for datalist_json in self.datalist_jsons]
+            base_dir=data_dir
+        ) for data_dir, datalist_json in zip(self.data_dirs, self.datalist_jsons)]
         test_datasets = [data.Dataset(data=datalist, transform=self.val_transforms) for datalist in datalists]
         return ConcatDataset(test_datasets)
 

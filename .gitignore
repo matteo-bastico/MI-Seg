@@ -133,8 +133,10 @@ dmypy.json
 
 *.ipynb
 #custom
+!dataset/
+dataset/*
+!dataset/MultiModalPelvic/
 /dataset/MultiModalPelvic/data/**
-/dataset/CT-ORG
 /wandb/
 /dataset/MultiModalPelvic/notebooks/
 /tests/
@@ -145,3 +147,4 @@ dmypy.json
 /test*.py
 /.idea
 /ray_lightning/
+/tune_torch2.py
