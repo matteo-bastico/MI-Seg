@@ -203,8 +203,8 @@ class MultiModalPelvicDataModule(LightningDataModule):
 
 
 def get_loaders(args):
-    data_dir = args.data_dir
-    datalist_jsons = [os.path.join(data_dir, json_list) for json_list in args.json_lists]
+    data_dirs = args.data_dirs
+    datalist_jsons = [os.path.join(data_dirs, json_list) for json_list in args.json_lists]
     train_transforms = transforms.Compose(
         [
             transforms.LoadImaged(keys=["image", "label"]),
@@ -265,7 +265,7 @@ def get_loaders(args):
             True,
             "training",
             base_dir=data_dir
-        ) for datalist_json in datalist_jsons]
+        ) for data_dir, datalist_json in zip(data_dirs, datalist_jsons)]
         if use_normal_dataset:
             train_datasets = [data.Dataset(
                 data=datalist,
@@ -296,7 +296,7 @@ def get_loaders(args):
             True,
             "validation",
             base_dir=data_dir
-        ) for datalist_json in datalist_jsons]
+        ) for data_dir, datalist_json in zip(data_dirs, datalist_jsons)]
         val_datasets = [data.Dataset(data=datalist, transform=val_transforms) for datalist in datalists]
         val_dataset = ConcatDataset(val_datasets)
         val_sampler = DistributedSampler(val_dataset, shuffle=False) if args.distributed else None
@@ -317,7 +317,7 @@ def get_loaders(args):
             True,
             "test",
             base_dir=data_dir
-        ) for datalist_json in datalist_jsons]
+        ) for data_dir, datalist_json in zip(data_dirs, datalist_jsons)]
         test_datasets = [data.Dataset(data=datalist, transform=val_transforms) for datalist in datalists]
         test_dataset = ConcatDataset(test_datasets)
         test_sampler = DistributedSampler(test_dataset, shuffle=False) if args.distributed else None
