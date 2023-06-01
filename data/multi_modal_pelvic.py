@@ -204,7 +204,7 @@ class MultiModalPelvicDataModule(LightningDataModule):
 
 def get_loaders(args):
     data_dirs = args.data_dirs
-    datalist_jsons = [os.path.join(data_dirs, json_list) for json_list in args.json_lists]
+    datalist_jsons = [os.path.join(data_dir, json_list) for data_dir, json_list in zip(args.data_dirs, args.json_lists)]
     train_transforms = transforms.Compose(
         [
             transforms.LoadImaged(keys=["image", "label"]),
