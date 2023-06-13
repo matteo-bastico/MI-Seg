@@ -40,14 +40,22 @@ def model_from_argparse_args(args):
         pretrained = torch.load(args.pretrained)
         # Standard name is state_dict for the model in our checkpoints
         state_dict = pretrained['state_dict']
-        # Not load output layer if number of channels is different
+        # Not load output layer if number of channels is different (for UNETR and Swin-unetr)
         if 'out.conv.conv.weight' in state_dict.keys():
             if state_dict['out.conv.conv.weight'].shape[0] != args.out_channels:
                 warnings.warn('Number of out channels of the pre-trained model different from model out_channels, '
                               'skipping loading of output layer.')
                 del state_dict['out.conv.conv.weight']
                 del state_dict['out.conv.conv.bias']
-
+        # TODO: we remove the last layer from the dict but we should keep if, check if the last layer of unet is always
+        # starting with model.2
+        # Not load output layer if number of channels is different (for UNET)
+        to_del = []
+        for key in state_dict.keys():
+            if 'model.2' in key:
+                to_del.append(key)
+        for key in to_del:
+            del state_dict[key]
         model.load_state_dict(state_dict, strict=False)  # strict=False deal with missing or added elements
 
     return model

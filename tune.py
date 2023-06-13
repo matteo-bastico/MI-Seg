@@ -54,7 +54,7 @@ def set_trail_config(trial, args):
     elif args.scheduler == "reduce_on_plateau":
         args.patience_scheduler = trial.suggest_int("patience_scheduler", 2, 10)
     # Model
-    # Only if not encoder frozer
+    # Only if not encoder frozen
     if not args.freeze_encoder:
         if args.model_name == 'unet':
             args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
