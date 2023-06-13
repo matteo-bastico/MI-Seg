@@ -130,6 +130,7 @@ class UNet(nn.Module):
         bias: bool = True,
         adn_ordering: str = "NDA",
         dimensions: int | None = None,
+        freeze_encoder: bool = False,
     ) -> None:
 
         super().__init__()
@@ -190,11 +191,15 @@ class UNet(nn.Module):
             else:
                 # the next layer is the bottom so stop recursion, create the bottom layer as the sublock for this layer
                 subblock = self._get_bottom_layer(c, channels[1])
+                # The last layer is a down_layer, so it belongs to the encoder
+                if freeze_encoder:
+                    subblock.requires_grad_(False)
                 upc = c + channels[1]
 
             down = self._get_down_layer(inc, c, s, is_top)  # create layer in downsampling path
             up = self._get_up_layer(upc, outc, s, is_top)  # create layer in upsampling path
-
+            if freeze_encoder:
+                down.requires_grad_(False)
             return self._get_connection_block(down, up, subblock)
 
         self.model = _create_block(in_channels, out_channels, self.channels, self.strides, True)
@@ -225,7 +230,8 @@ class UNet(nn.Module):
             norm_up=decoder_norm_name,
             dropout=args.dropout_rate,
             bias=not args.no_bias,
-            adn_ordering=args.adn_ordering
+            adn_ordering=args.adn_ordering,
+            freeze_encoder=args.freeze_encoder
         )
 
     def _get_connection_block(self, down_path: nn.Module, up_path: nn.Module, subblock: nn.Module) -> nn.Module:

@@ -45,6 +45,7 @@ class UNETR(nn.Module):
             vit_norm_name: Union[Tuple, str] = "layer",
             decoder_norm_name: Union[Tuple, str] = "instance",
             encoder_norm_name: Union[Tuple, str] = "instance",
+            freeze_encoder: bool = False
     ) -> None:
         """
         Args:
@@ -201,6 +202,13 @@ class UNETR(nn.Module):
         self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
         self.proj_axes = (0, spatial_dims + 1) + tuple(d + 1 for d in range(spatial_dims))
         self.proj_view_shape = list(self.feat_size) + [self.hidden_size]
+        # Freeze Encoder
+        if freeze_encoder:
+            self.vit.requires_grad_(False)
+            self.encoder1.requires_grad_(False)
+            self.encoder2.requires_grad_(False)
+            self.encoder3.requires_grad_(False)
+            self.encoder4.requires_grad_(False)
 
     @classmethod
     def from_argparse_args(cls, args):
@@ -233,7 +241,8 @@ class UNETR(nn.Module):
             qkv_bias=args.qkv_bias,
             vit_norm_name=vit_norm_name,
             decoder_norm_name=decoder_norm_name,
-            encoder_norm_name=encoder_norm_name
+            encoder_norm_name=encoder_norm_name,
+            freeze_encoder=args.freeze_encoder
         )
 
     def proj_feat(self, x):
@@ -245,6 +254,7 @@ class UNETR(nn.Module):
     def forward(self,
                 x_in,
                 modalities=None):
+        # TODO: switch double input with single *data and upack it
         if (self.vit_norm_name == "instance_cond" or
             self.encoder_norm_name == "instance_cond" or
             self.decoder_norm_name == "instance_cond") and modalities is None:

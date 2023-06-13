@@ -58,7 +58,7 @@ class SwinUNETR(nn.Module):
         vit_norm_name: Union[Tuple, str] = "layer",
         decoder_norm_name: Union[Tuple, str] = "instance",
         encoder_norm_name: Union[Tuple, str] = "instance",
-
+        freeze_encoder: bool = False
     ) -> None:
         """
         Args:
@@ -248,6 +248,14 @@ class SwinUNETR(nn.Module):
         )
 
         self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
+        # Freeze Encoder
+        if freeze_encoder:
+            self.swinViT.requires_grad_(False)
+            self.encoder1.requires_grad_(False)
+            self.encoder2.requires_grad_(False)
+            self.encoder3.requires_grad_(False)
+            self.encoder4.requires_grad_(False)
+            self.encoder10.requires_grad_(False)
 
     @classmethod
     def from_argparse_args(cls, args):
@@ -282,7 +290,8 @@ class SwinUNETR(nn.Module):
             downsample=args.downsample,
             vit_norm_name=vit_norm_name,
             encoder_norm_name=encoder_norm_name,
-            decoder_norm_name=decoder_norm_name
+            decoder_norm_name=decoder_norm_name,
+            freeze_encoder=args.freeze_encoder
         )
 
     def load_from(self, weights):

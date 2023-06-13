@@ -59,6 +59,8 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--no_bias", action="store_true", help="Not use bias in UNet")
     group.add_argument('--adn_ordering', default="NDA",
                        help='Order of activation, dropout and normalization in UNet', type=str)
+    group.add_argument('--freeze_encoder', action="store_true",
+                       help='Train only the decoder of the model (assume that a pretrained model is given')
     # Loss,
     group = parser.add_argument_group("loss")
     group.add_argument("--criterion", default="dice_focal", type=str, help="criterion for training loss")

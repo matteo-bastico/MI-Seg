@@ -100,7 +100,9 @@ def objective(args, single_trial):
         )
     model = model_from_argparse_args(args).to(args.device)
     if args.distributed:
-        find_unused_parameters = args.vit_norm_name == "instance_cond" or args.encoder_norm_name == "instance_cond" or \
+        # If encoder is freeze we never need to find unused parameters
+        find_unused_parameters = (args.vit_norm_name == "instance_cond" and not args.freeze_encoder) or \
+                                 (args.encoder_norm_name == "instance_cond" and not args.freeze_encoder) or \
                                  args.decoder_norm_name == "instance_cond"
         model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank,
                     find_unused_parameters=find_unused_parameters)
@@ -149,6 +151,9 @@ def objective(args, single_trial):
         scaler = GradScaler()
     # Train and validation
     best_acc = 0.0
+    # TODO: Torch 2.0.0 Update: compile model before training
+    # This should be done before generating the model_inferer beacuse it uses the model
+    # opt_model = torch.compile(model)
     for epoch in range(1, args.max_epochs + 1):
         # Log learning rate
         if logger is not None and scheduler is not None:
@@ -159,7 +164,7 @@ def objective(args, single_trial):
             torch.distributed.barrier()
         # Train one epoch
         epoch_loss = train_epoch(
-            model,
+            model,  # opt_model
             train_loader,
             optimizer,
             criterion,
@@ -179,7 +184,7 @@ def objective(args, single_trial):
         if epoch % args.check_val_every_n_epoch == 0:
             # Val one epoch
             val_loss, accuracy, surface, other_metrics = val_epoch(
-                model,
+                model,  # opt_model
                 val_loader,
                 criterion,
                 args.device,
@@ -214,7 +219,7 @@ def objective(args, single_trial):
                     # Last model not best, useful to restart training from last checkpoint if it is not best
                     model_name = 'last.pt'
                 save_checkpoint(
-                    model,
+                    model,  # opt_model
                     epoch,
                     model_logdir,
                     model_name,
