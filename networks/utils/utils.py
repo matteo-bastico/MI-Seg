@@ -47,8 +47,8 @@ def model_from_argparse_args(args):
                               'skipping loading of output layer.')
                 del state_dict['out.conv.conv.weight']
                 del state_dict['out.conv.conv.bias']
-        # TODO: we remove the last layer from the dict but we should keep if, check if the last layer of unet is always
-        # starting with model.2
+        # TODO: we remove the last layer from the dict but we should keep if same size,
+        #  check if the last layer of unet is always starting with model.2
         # Not load output layer if number of channels is different (for UNET)
         to_del = []
         for key in state_dict.keys():
@@ -56,6 +56,6 @@ def model_from_argparse_args(args):
                 to_del.append(key)
         for key in to_del:
             del state_dict[key]
-        model.load_state_dict(state_dict, strict=False)  # strict=False deal with missing or added elements
+        print(model.load_state_dict(state_dict, strict=False))  # strict=False deal with missing or added elements
 
     return model
