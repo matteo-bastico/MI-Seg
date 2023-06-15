@@ -54,6 +54,9 @@ def set_trail_config(trial, args):
     elif args.scheduler == "reduce_on_plateau":
         args.patience_scheduler = trial.suggest_int("patience_scheduler", 2, 10)
     # Model
+    if args.model_name == 'd_unetr':
+        args.alpha_reversal = trial.suggest_float("alpha_reversal", 0.2, 1)
+
     # Only if not encoder frozen
     if not args.freeze_encoder:
         if args.model_name == 'unet':

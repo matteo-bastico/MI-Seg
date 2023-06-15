@@ -45,7 +45,8 @@ class D_UNETR(nn.Module):
             vit_norm_name: Union[Tuple, str] = "layer",
             decoder_norm_name: Union[Tuple, str] = "instance",
             encoder_norm_name: Union[Tuple, str] = "instance",
-            freeze_encoder: bool = False
+            freeze_encoder: bool = False,
+            alpha_reversal: float = 1
     ) -> None:
         """
         Args:
@@ -128,7 +129,7 @@ class D_UNETR(nn.Module):
             qkv_bias=qkv_bias,
             norm_type=vit_norm_name,
             classification_reverse_gradient=True,
-            alpha_reversal=1.,
+            alpha_reversal=alpha_reversal,
             post_activation="Softmax"
         )
         self.encoder1 = UnetrPrUpBlock(
@@ -258,7 +259,8 @@ class D_UNETR(nn.Module):
             vit_norm_name=vit_norm_name,
             decoder_norm_name=decoder_norm_name,
             encoder_norm_name=encoder_norm_name,
-            freeze_encoder=args.freeze_encoder
+            freeze_encoder=args.freeze_encoder,
+            alpha_reversal=args.alpha_reversal
         )
 
     def proj_feat(self, x):

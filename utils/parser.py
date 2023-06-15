@@ -104,6 +104,7 @@ def add_model_argparse_args(parser: ArgumentParser):
 
     # TODO: fix this better
     group.add_argument("--source", type=int, help="Source domain for adversarial training")
+    group.add_argument("--alpha_reversal", type=float, default=1., help="")
     return parser
 
 
