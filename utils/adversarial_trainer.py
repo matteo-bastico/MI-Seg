@@ -1,25 +1,29 @@
 import time
 import torch
 
+from torch import nn
 from torch.cuda.amp import autocast
-from monai.data import decollate_batch
+from monai.data import decollate_batch, list_data_collate
 from monai.metrics import LossMetric, Cumulative
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-def train_epoch(
+def train_epoch_adversarial(
         model,
         loader,
         optimizer,
         criterion,
         device,
         scaler,
+        source,
         amp=True,
-        iters_to_accumulate=1
+        iters_to_accumulate=1,
 ):
     model.train()
     start_time = time.time()
-    run_loss = LossMetric(loss_fn=criterion)
+    adversarial_criterion = nn.CrossEntropyLoss()
+    run_loss_seg = LossMetric(loss_fn=criterion)
+    run_loss_adv = LossMetric(loss_fn=adversarial_criterion)
     # Added zero grad here
     optimizer.zero_grad(set_to_none=True)  # set_to_none=True here can modestly improve performance
     for idx, batch in enumerate(loader):
@@ -32,11 +36,39 @@ def train_epoch(
         # optimizer.zero_grad()  # Moved after grad accumulation
         if (idx + 1) % iters_to_accumulate == 0 or idx + 1 == len(loader):
             with autocast(enabled=amp):
-                output = model(data, modality)
+                # Adversarial model output are source, pred
+                pred_domain, pred_segmentation = model(data, modality)
                 # You may wish to divide loss by iters_to_accumulate to average
                 # across the effective (accumulated) global batch.
-                loss = criterion(output, target) / iters_to_accumulate
-                run_loss(output, target)
+                # Segmentation loss only for source modality
+                # We have to do this beacuse meta_tensor of monai does not accept indexing with vector
+                # Only if there are samples from source in the batch
+                # Target/Source adversarial loss for all
+                # RuntimeError: "nll_loss_forward_reduce_cuda_kernel_2d_index" not implemented for 'Int'
+                loss_adv = adversarial_criterion(
+                    pred_domain,
+                    (modality == source).long()
+                ) / iters_to_accumulate
+                loss = loss_adv
+                # Adversarial loss for all
+                run_loss_adv(pred_domain, (modality == source).long())
+
+                if torch.sum(modality == source) > 0:
+                    valid_seg = [pred for idx, pred in enumerate(pred_segmentation) if modality[idx] == source]
+                    valid_target = [tar for idx, tar in enumerate(target) if modality[idx] == source]
+                    # Collate
+                    valid_seg = list_data_collate(valid_seg)
+                    valid_target = list_data_collate(valid_target)
+                    loss_seg = criterion(
+                        valid_seg,
+                        valid_target
+                    ) / iters_to_accumulate
+                    # Segmentation loss only for source modality
+                    run_loss_seg(
+                        valid_seg,
+                        valid_target
+                    )
+                    loss += loss_seg
             # print(f"Train batch {idx}, loss {loss.item()}")
             # If AMP is active
             if amp:
@@ -59,9 +91,39 @@ def train_epoch(
                 # to get the right no-allreduce behavior.
                 with model.no_sync():
                     with autocast(enabled=amp):
-                        output = model(data, modality)
-                        loss = criterion(output, target) / iters_to_accumulate
-                        run_loss(output, target)
+                        # Adversarial model output are source, pred
+                        pred_domain, pred_segmentation = model(data, modality)
+                        # You may wish to divide loss by iters_to_accumulate to average
+                        # across the effective (accumulated) global batch.
+                        # Segmentation loss only for source modality
+                        # We have to do this beacuse meta_tensor of monai does not accept indexing with vector
+                        # Only if there are samples from source in the batch
+                        # Target/Source adversarial loss for all
+                        # RuntimeError: "nll_loss_forward_reduce_cuda_kernel_2d_index" not implemented for 'Int'
+                        loss_adv = adversarial_criterion(
+                            pred_domain,
+                            (modality == source).long()
+                        ) / iters_to_accumulate
+                        loss = loss_adv
+                        # Adversarial loss for all
+                        run_loss_adv(pred_domain, (modality == source).long())
+
+                        if torch.sum(modality == source) > 0:
+                            valid_seg = [pred for idx, pred in enumerate(pred_segmentation) if modality[idx] == source]
+                            valid_target = [tar for idx, tar in enumerate(target) if modality[idx] == source]
+                            # Collate
+                            valid_seg = list_data_collate(valid_seg)
+                            valid_target = list_data_collate(valid_target)
+                            loss_seg = criterion(
+                                valid_seg,
+                                valid_target
+                            ) / iters_to_accumulate
+                            # Segmentation loss only for source modality
+                            run_loss_seg(
+                                valid_seg,
+                                valid_target
+                            )
+                            loss += loss_seg
                     if amp:
                         scaler.scale(loss).backward()
                     else:
@@ -69,9 +131,39 @@ def train_epoch(
             else:
                 # No need to de-sync model if not DDP
                 with autocast(enabled=amp):
-                    output = model(data, modality)
-                    loss = criterion(output, target) / iters_to_accumulate
-                    run_loss(output, target)
+                    # Adversarial model output are source, pred
+                    pred_domain, pred_segmentation = model(data, modality)
+                    # You may wish to divide loss by iters_to_accumulate to average
+                    # across the effective (accumulated) global batch.
+                    # Segmentation loss only for source modality
+                    # We have to do this beacuse meta_tensor of monai does not accept indexing with vector
+                    # Only if there are samples from source in the batch
+                    # Target/Source adversarial loss for all
+                    # RuntimeError: "nll_loss_forward_reduce_cuda_kernel_2d_index" not implemented for 'Int'
+                    loss_adv = adversarial_criterion(
+                        pred_domain,
+                        (modality == source).long()
+                    ) / iters_to_accumulate
+                    loss = loss_adv
+                    # Adversarial loss for all
+                    run_loss_adv(pred_domain, (modality == source).long())
+
+                    if torch.sum(modality == source) > 0:
+                        valid_seg = [pred for idx, pred in enumerate(pred_segmentation) if modality[idx] == source]
+                        valid_target = [tar for idx, tar in enumerate(target) if modality[idx] == source]
+                        # Collate
+                        valid_seg = list_data_collate(valid_seg)
+                        valid_target = list_data_collate(valid_target)
+                        loss_seg = criterion(
+                            valid_seg,
+                            valid_target
+                        ) / iters_to_accumulate
+                        # Segmentation loss only for source modality
+                        run_loss_seg(
+                            valid_seg,
+                            valid_target
+                        )
+                        loss += loss_seg
                 if amp:
                     scaler.scale(loss).backward()
                 else:
@@ -79,13 +171,18 @@ def train_epoch(
         # Update distributed running loss
         # run_loss.update(loss)
     # Total loss
-    epoch_loss = run_loss.aggregate(reduction='mean').item()
+    epoch_loss_seg = run_loss_seg.aggregate(reduction='mean').item()
+    epoch_loss_adv = run_loss_adv.aggregate(reduction='mean').item()
     # Important to reset and free memory
-    run_loss.reset()
-    return epoch_loss
+    run_loss_seg.reset()
+    run_loss_adv.reset()
+    return epoch_loss_seg, epoch_loss_adv
 
 
-def val_epoch(
+# TODO: function for forward and loss computation
+
+
+def val_epoch_adversarial(
         model,
         loader,
         criterion,
@@ -116,9 +213,9 @@ def val_epoch(
                 modality = modality.to(device)
             with autocast(enabled=amp):
                 if model_inferer is not None:
-                    output = model_inferer(data, modalities=modality)
+                    output = model_inferer(data, modalities=modality, return_classification=False)
                 else:
-                    output = model(data, modality)
+                    output = model(data, modality, return_classification=False)
             loss = criterion(output, target)
             run_loss(output, target)
             # In the print we assume validation batch

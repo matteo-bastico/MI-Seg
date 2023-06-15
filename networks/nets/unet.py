@@ -215,6 +215,7 @@ class UNet(nn.Module):
                                                 not args.encoder_norm_no_affine,
                                                 args.num_groups,
                                                 args.num_styles)
+        # TODO: coorect bug here range(0, args.num_layers) [in the experiments the number is increased by 2]
         channels = [args.feature_size * 2 ** i for i in range(1, args.num_layers + 1)]
         return cls(
             spatial_dims=args.spatial_dims,

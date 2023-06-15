@@ -18,6 +18,7 @@ import torch.nn as nn
 from monai.utils import optional_import
 from monai.networks.blocks.patchembedding import PatchEmbeddingBlock
 from ..blocks.transformer_block import TransformerBlock
+from ..layers.gradient_reversal import GradientReversal
 from ..layers.utils import get_norm_layer
 from ..norms.conditional_instance_norm import _ConditionalInstanceNorm
 
@@ -52,6 +53,8 @@ class ViT(nn.Module):
         post_activation="Tanh",
         qkv_bias: bool = False,
         norm_type: Union[Tuple, str] = "layer",
+        classification_reverse_gradient: bool = False,
+        alpha_reversal: float = 1.
     ) -> None:
         """
         Args:
@@ -129,9 +132,37 @@ class ViT(nn.Module):
         if self.classification:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, hidden_size))
             if post_activation == "Tanh":
-                self.classification_head = nn.Sequential(nn.Linear(hidden_size, num_classes), nn.Tanh())
+                if classification_reverse_gradient:
+                    self.classification_head = nn.Sequential(
+                        GradientReversal(alpha=alpha_reversal),
+                        nn.Linear(hidden_size, num_classes),
+                        nn.Tanh()
+                    )
+                else:
+                    self.classification_head = nn.Sequential(
+                        nn.Linear(hidden_size, num_classes),
+                        nn.Tanh()
+                    )
+            elif post_activation == "Softmax":
+                if classification_reverse_gradient:
+                    self.classification_head = nn.Sequential(
+                        GradientReversal(alpha=alpha_reversal),
+                        nn.Linear(hidden_size, num_classes),
+                        nn.Softmax(dim=1)
+                    )
+                else:
+                    self.classification_head = nn.Sequential(
+                        nn.Linear(hidden_size, num_classes),
+                        nn.Softmax(dim=1)
+                    )
             else:
-                self.classification_head = nn.Linear(hidden_size, num_classes)  # type: ignore
+                if classification_reverse_gradient:
+                    self.classification_head = nn.Sequential(
+                        GradientReversal(alpha=alpha_reversal),
+                        nn.Linear(hidden_size, num_classes)  # type: ignore
+                    )
+                else:
+                    self.classification_head = nn.Linear(hidden_size, num_classes)  # type: ignore
 
     def forward(self,
                 x,

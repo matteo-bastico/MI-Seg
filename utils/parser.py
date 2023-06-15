@@ -101,6 +101,9 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--project", type=str, help="wandb project")
     group.add_argument("--entity", type=str, help="wandb entity")
     group.add_argument("--wandb_mode", type=str, default='online', help="Mode for wandb logger")
+
+    # TODO: fix this better
+    group.add_argument("--source", type=int, help="Source domain for adversarial training")
     return parser
 
 
