@@ -86,6 +86,7 @@ def objective(args, single_trial):
     else:
         trial = single_trial
     args = set_trail_config(trial, args)
+    print(args.alpha_reversal)
     # Folder to save model
     model_logdir = os.path.join(args.default_root_dir, args.study_name, str(trial.number))
     # Create folder if not exists

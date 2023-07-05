@@ -5,6 +5,7 @@ from monai.utils import optional_import
 from networks.nets.unetr import UNETR
 from networks.nets.d_unetr import D_UNETR
 from networks.nets.unet import UNet
+from networks.nets.unet_vanilla import UNetVanilla
 from networks.nets.swin_unetr import SwinUNETR
 
 rearrange, _ = optional_import("einops", name="rearrange")
@@ -22,6 +23,9 @@ def model_from_argparse_args(args):
         model = UNETR.from_argparse_args(args)
     elif model_name == 'unet':
         model = UNet.from_argparse_args(args)
+    elif model_name == 'unet_vanilla':
+        model = UNetVanilla.from_argparse_args(args)
+        print(model)
     elif model_name == 'swin_unetr':
         model = SwinUNETR.from_argparse_args(args)
     elif model_name == 'pre_swin_unetr':

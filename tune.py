@@ -58,7 +58,7 @@ def set_trail_config(trial, args):
     if not args.freeze_encoder:
         if args.model_name == 'unet':
             args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
-            args.num_layers = trial.suggest_int("num_layers", 3, 5)
+            # args.num_layers = trial.suggest_int("num_layers", 3, 5)
             # Change strides based on nulber of layers
             if args.num_layers == 3:
                 args.strides = [2, 2]
@@ -69,11 +69,11 @@ def set_trail_config(trial, args):
             # args.num_res_units = trial.suggest_int("num_res_units", 2, 3)
         elif args.model_name == "unetr":
             args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
-            args.num_heads = trial.suggest_categorical("num_heads", [8, 12, 16])
+            # args.num_heads = trial.suggest_categorical("num_heads", [8, 12, 16])
             # args.hidden_size = trial.suggest_categorical("hidden_size", [512, 768, 1024])
         elif args.model_name == 'swin_unetr':
             args.feature_size = trial.suggest_categorical("feature_size", [12, 24, 36])  # Divisible by 12
-            args.num_heads = trial.suggest_categorical("num_heads", [2, 3, 4])  # Number of heads first layer
+            # args.num_heads = trial.suggest_categorical("num_heads", [2, 3, 4])  # Number of heads first layer
     return args
 
 

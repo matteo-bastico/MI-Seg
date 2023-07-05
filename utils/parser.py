@@ -13,7 +13,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--roi_x", default=96, type=int, help="roi size in x direction")
     group.add_argument("--roi_y", default=96, type=int, help="roi size in y direction")
     group.add_argument("--roi_z", default=96, type=int, help="roi size in z direction")
-    group.add_argument("--feature_size", default=16, type=int, help="feature size dimention")
+    group.add_argument("--feature_size", default=16, type=int, nargs='+', help="feature size dimention")
     group.add_argument("--hidden_size", default=768, type=int, help="hidden size dimention in ViT encoder")
     group.add_argument("--mlp_dim", default=3072, type=int, help="mlp dimention in ViT encoder")
     group.add_argument("--num_heads", default=12, type=int, help="number of attention heads in ViT encoder")
