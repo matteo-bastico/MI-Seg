@@ -81,18 +81,21 @@ def main(args):
     path = Path(args.result_dir)
     path.mkdir(parents=True, exist_ok=True)
 
+    model.eval()
     for el in datalist:
         sample = predict_transforms({
             "image": el["image"],
             # This is just to save transformation and invert the model prediction
             "label": el["image"]
         })
-        model.eval()
+        # Change this because modality should be a list not an int
+        modality = el["modality"]
+        modality = torch.tensor([modality]).to(args.device)
         with torch.no_grad():
             # unsqueeze(0) to remove batch direction
             prediction = model_inferer(
                 sample["image"].unsqueeze(0).to(args.device),
-                modalities=el['modality']
+                modalities=modality
             )
         prediction = post_pred(prediction.squeeze(0)).cpu()
         prediction.applied_operations = sample["label"].applied_operations
