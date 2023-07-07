@@ -1,21 +1,12 @@
 import torch
-import pyvista as pv
-import plotly.graph_objects as go
 import numpy as np
 from functools import partial
-from torch.cuda.amp import autocast
 from argparse import ArgumentParser
 from monai import transforms
-from monai.data import decollate_batch
-from monai.metrics import LossMetric, Cumulative
 from monai.transforms import AsDiscrete
-from monai.metrics.meandice import DiceMetric
-from data.multi_modal_pelvic import get_loaders
 from networks.utils.utils import model_from_argparse_args
 from monai.inferers import sliding_window_inference
-from monai.metrics import SurfaceDistanceMetric
-from utils.parser import add_model_argparse_args, add_data_argparse_args, add_tune_argparse_args
-from scipy.ndimage import binary_dilation
+from utils.parser import add_model_argparse_args
 from monai.transforms.utils import allow_missing_keys_mode
 from data.utils import load_decathlon_datalist_with_modality
 from pathlib import Path
