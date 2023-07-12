@@ -272,7 +272,13 @@ class SwinUNETR(nn.Module):
                                                 not args.encoder_norm_no_affine,
                                                 args.num_groups,
                                                 args.num_styles)
-        depths = (args.depth_swin_block,) * 4
+
+        if len(args.depth_swin_block) == 1:
+            depths = (args.depth_swin_block[0],) * 4
+        else:
+            assert len(args.depth_swin_block) == 4, "The length of depth_swin_block should be 4"
+            depths = args.depth_swin_block
+
         num_heads = tuple(2**i*args.num_heads for i in range(0, 4))
         return cls(
             img_size=(args.roi_x, args.roi_y, args.roi_z),
