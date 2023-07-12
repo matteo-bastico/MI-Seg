@@ -13,7 +13,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--roi_x", default=96, type=int, help="roi size in x direction")
     group.add_argument("--roi_y", default=96, type=int, help="roi size in y direction")
     group.add_argument("--roi_z", default=96, type=int, help="roi size in z direction")
-    group.add_argument("--feature_size", default=16, type=int, nargs='+', help="feature size dimention")
+    group.add_argument("--feature_size", default=[16], type=int, nargs='+', help="feature size dimention")
     group.add_argument("--hidden_size", default=768, type=int, help="hidden size dimention in ViT encoder")
     group.add_argument("--mlp_dim", default=3072, type=int, help="mlp dimention in ViT encoder")
     group.add_argument("--num_heads", default=12, type=int, help="number of attention heads in ViT encoder")
@@ -37,7 +37,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     # Swin-UNETR exclusive args
     group.add_argument("--dropout_path_rate", default=0.0, type=float, help="drop path rate")
     group.add_argument("--attn_drop_rate", default=0.0, type=float, help="attn drop rate")
-    group.add_argument("--depth_swin_block", default=2, type=int, nargs='+', help="depth of swin-transformer block")
+    group.add_argument("--depth_swin_block", default=[2], type=int, nargs='+', help="depth of swin-transformer block")
     group.add_argument("--use_checkpoint", action="store_true", help="use gradient checkpointing to save memory")
     group.add_argument('--downsample', default="merging",
                        help='downsample function in swin-transformer ("merging" or "mergingv2")', type=str)
