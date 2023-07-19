@@ -152,6 +152,5 @@ dataset/*
 /tune_torch2.py
 /notebooks/
 /dataset/MultiModalPelvic
-/dataset/MultiModalPelvic/
 adversarial_test.py
 adversarial_tune.py
