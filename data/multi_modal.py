@@ -297,7 +297,7 @@ def get_loaders(args):
             "validation",
             base_dir=data_dir
         ) for data_dir, datalist_json in zip(data_dirs, datalist_jsons)]
-        val_datasets = [data.Dataset(data=datalist, transform=train_transforms) for datalist in datalists]
+        val_datasets = [data.Dataset(data=datalist, transform=val_transforms) for datalist in datalists]
         val_dataset = ConcatDataset(val_datasets)
         val_sampler = DistributedSampler(val_dataset, shuffle=False) if args.distributed else None
         val_loader = data.DataLoader(
