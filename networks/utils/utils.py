@@ -3,7 +3,6 @@ import warnings
 
 from monai.utils import optional_import
 from networks.nets.unetr import UNETR
-from networks.nets.d_unetr import D_UNETR
 from networks.nets.unet import UNet
 from networks.nets.unet_vanilla import UNetVanilla
 from networks.nets.swin_unetr import SwinUNETR
@@ -17,9 +16,7 @@ __all__ = [
 
 def model_from_argparse_args(args):
     model_name = args.model_name
-    if model_name == 'd_unetr':
-        model = D_UNETR.from_argparse_args(args)
-    elif model_name == 'unetr':
+    if model_name == 'unetr':
         model = UNETR.from_argparse_args(args)
     elif model_name == 'unet':
         model = UNet.from_argparse_args(args)
