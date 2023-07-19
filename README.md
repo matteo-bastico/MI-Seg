@@ -137,34 +137,25 @@ Our released implementation is tested on:
 ## Usage
 
 ### Dataset
-The dataset used in our experiments can be downloaded [here](https://zenodo.org/record/583096#.Y8fNVOzMKV4) upon access request.
-Download  and unzip it into `/MultiModalPelvic/data` folder before applying our pre-processing provided.
+The dataset used in our experiments can be downloaded [here](https://zmiclab.github.io/zxh/0/mmwhs/) upon access request.
+Download  and unzip it into `/dataset/MM-WHS` folder.
 
-Execute the pre-processing scripts in the following order:
-<ul>
-<li> prepare_data.py: in order to group files into folder corresponding to image modalities</li>
-<li> compress_data.py: generates compressed .nii.gz files for MRI and Deformed CT volumes</li>
-<li> convert_labels.py: converts RT Structs files into .nii.gz files containing the labels</li>
-<li> [Optional] Perform N4 Bias Correction of T2-Weighted MRIs using bias_correction.py</li>
-</ul> 
+[Optional] Convert label and Perform N4 Bias Correction of MRIs using the provided Notebook load_data.ipynb
 
 You should end up with a similar data structure (sub-folders are not represented here)
 ```sh
-  MultiModalPelvic
-  ├── data	
-  │   ├── 1_01_P # Patient Folder
-  │   │   ...
-  │   │   ├── Deformed_CT.nii.gz
-  │   │   └── labels.nii.gz
-  │   │   └── T2.nii.gz
-  │   │   └── T2_N4.nii.gz
+  MM-WHS
+  ├── ct_train	# Ct training folder
+  │   ├── ct_train_1001_image.nii.gz # Image
+  │   ├── ct_train_1001_label.nii.gz # Label
   │   ...
-  ├── CT.json
-  ├── MR.json
+  ├── ct_test
+  ├── mr_train
+  ├── mr_test
   ...
   ```
 
-The splits we used for train/validation/test are provided in `CT.json` and `MR.json`.
+The splits we used for our cross_validation are provided in `CT_fold1.json` and `CT_fold2.json`.
 ### Training
 To train a model you can use the `train.py` script provided. Single training are based on PyTorch Lightning and 
 all the Trainer arguments can be passed to the script 

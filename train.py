@@ -1,21 +1,18 @@
 import warnings
 import wandb
-import os.path
-import matplotlib.pyplot as plt
 
-from pathlib import Path
 from argparse import ArgumentParser
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from networks.lightning_monai import LitMonai
-from data.multi_modal_pelvic import MultiModalPelvicDataModule
+from data.multi_modal import MultiModalDataModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from utils.parser import add_model_argparse_args, add_data_argparse_args
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 
 def main(args):
-    lit_data = MultiModalPelvicDataModule.from_argparse_args(args)
+    lit_data = MultiModalDataModule.from_argparse_args(args)
     lit_model = LitMonai.from_argparse_args(args)
     wandb_logger = WandbLogger(
         name=args.experiment_name if args.experiment_name else None,

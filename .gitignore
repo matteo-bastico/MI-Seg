@@ -135,10 +135,12 @@ dmypy.json
 #custom
 !dataset/
 dataset/*
-!dataset/MultiModalPelvic/
-/dataset/MultiModalPelvic/data/**
+!dataset/MM-WHS/
+/dataset/MM-WHS/ct_test/**
+/dataset/MM-WHS/ct_train/**
+/dataset/MM-WHS/mr_test/**
+/dataset/MM-WHS/mr_train/**
 /wandb/
-/dataset/MultiModalPelvic/notebooks/
 /tests/
 /experiments/
 /pretrained/*
@@ -149,3 +151,7 @@ dataset/*
 /ray_lightning/
 /tune_torch2.py
 /notebooks/
+/dataset/MultiModalPelvic
+/dataset/MultiModalPelvic/
+adversarial_test.py
+adversarial_tune.py

@@ -10,7 +10,7 @@ from argparse import ArgumentParser
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from networks.lightning_monai import LitMonai
-from data.multi_modal_pelvic import MultiModalPelvicDataModule
+from data.multi_modal import MultiModalDataModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from utils.parser import add_model_argparse_args, add_data_argparse_args
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -18,7 +18,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 def main(args):
     args.auto_lr_find = True
-    lit_data = MultiModalPelvicDataModule.from_argparse_args(args)
+    lit_data = MultiModalDataModule.from_argparse_args(args)
     lit_model = LitMonai.from_argparse_args(args)
     # It is not supported in ddp, do on single node and then start other trainer with new lr
     # Suggestion: do with accelerator 'gpu'

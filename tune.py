@@ -12,7 +12,7 @@ from torch.cuda.amp import GradScaler
 from optuna.samplers import TPESampler
 from monai.transforms import AsDiscrete
 from monai.metrics.meandice import DiceMetric
-from data.multi_modal_pelvic import get_loaders
+from data.multi_modal import get_loaders
 from utils.trainer import train_epoch, val_epoch
 from networks.utils.utils import model_from_argparse_args
 from monai.inferers import sliding_window_inference

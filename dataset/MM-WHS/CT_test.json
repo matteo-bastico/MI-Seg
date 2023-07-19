@@ -1,0 +1,25 @@
+{
+  "description": "",
+  "labels": {
+    "0": "background"
+  },
+  "licence": "",
+  "modality": 0,
+  "name": "MM-WHS",
+  "numTest": 4,
+  "numTraining": 16,
+  "numValidation": 4,
+  "reference": "",
+  "release": "",
+  "tensorImageSize": "3D",
+  "test": [
+    {
+      "image": "ct_train/ct_train_1002_image.nii.gz"
+    },
+    {
+      "image": "ct_train/ct_train_1003_image.nii.gz"
+    }
+  ],
+  "training": [],
+  "validation": []
+}
