@@ -88,7 +88,7 @@ Describe project here.
 -->
 ### Citation
 
-Our paper is available in [example](https://www.example.com). Please cite our work with
+Our paper has been accepted at ICCVW 2023 and is available in [ArXiv](https://arxiv.org/abs/2310.05572). Please cite our work with
 ```sh
   @article{
     
