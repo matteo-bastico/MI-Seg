@@ -88,10 +88,15 @@ Describe project here.
 -->
 ### Citation
 
-Our paper has been accepted at ICCVW 2023 and is available in [ArXiv](https://arxiv.org/abs/2310.05572). Please cite our work with
+Our paper has been accepted at ICCVW 2023 and is available [here](https://openaccess.thecvf.com/content/ICCV2023W/LXCV/papers/Bastico_A_Simple_and_Robust_Framework_for_Cross-Modality_Medical_Image_Segmentation_ICCVW_2023_paper.pdf) and on [ArXiv](https://arxiv.org/abs/2310.05572). Please cite our work with
 ```sh
-  @article{
-    
+  @InProceedings{Bastico_2023_ICCV,
+    author    = {Bastico, Matteo and Ryckelynck, David and Cort\'e, Laurent and Tillier, Yannick and Decenci\`ere, Etienne},
+    title     = {A Simple and Robust Framework for Cross-Modality Medical Image Segmentation Applied to Vision Transformers},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) Workshops},
+    month     = {October},
+    year      = {2023},
+    pages     = {4128-4138}
   }
   ```
 
