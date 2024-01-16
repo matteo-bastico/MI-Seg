@@ -88,10 +88,15 @@ Describe project here.
 -->
 ### Citation
 
-Our paper is available in [example](https://www.example.com). Please cite our work with
+Our paper has been accepted at ICCVW 2023 and is available [here](https://openaccess.thecvf.com/content/ICCV2023W/LXCV/papers/Bastico_A_Simple_and_Robust_Framework_for_Cross-Modality_Medical_Image_Segmentation_ICCVW_2023_paper.pdf) and on [ArXiv](https://arxiv.org/abs/2310.05572). Please cite our work with
 ```sh
-  @article{
-    
+  @InProceedings{Bastico_2023_ICCV,
+    author    = {Bastico, Matteo and Ryckelynck, David and Cort\'e, Laurent and Tillier, Yannick and Decenci\`ere, Etienne},
+    title     = {A Simple and Robust Framework for Cross-Modality Medical Image Segmentation Applied to Vision Transformers},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) Workshops},
+    month     = {October},
+    year      = {2023},
+    pages     = {4128-4138}
   }
   ```
 
@@ -209,7 +214,22 @@ python utils/run_server.py --path=experiments/optuna/MI-Seg.log
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
+### Pre-Trained Models
 
+The best pre-trained model weights for Conditional UNet and Swin-UNETR resulting from our hyper-parameters optimization 
+can be downloaded [here](https://drive.google.com/drive/folders/1S-GdryfNziYV4088jh4meVbqdWkdEwuL?usp=sharing). 
+
+For instance, to produce the segmentation on the test dataset using the provided weights you can run for Conditional UNet:
+
+```
+python predict_whs.py --model=unet_vanilla --encoder_norm_name=instance_cond --feature_size 16 64 128 256 512 --num_res_units=3 --strides 1 2 2 2 1 --out_channels=8 --checkpoint=path/to/weights.pt --result_dir=path/to/result
+```
+
+or for Conditional Swin-UNETR:
+
+```
+python -u predict_whs.py --model=swin_unetr --encoder_norm_name=instance_cond --vit_norm_name=instance_cond --feature_size=36 --num_heads=4 --out_channels=8 --checkpoint=path/to/weights.pt --result_dir=path/to/result
+```
 
 <!-- ROADMAP -->
 ## Roadmap
