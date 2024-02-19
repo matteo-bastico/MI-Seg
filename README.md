@@ -182,7 +182,7 @@ In the previous example wandb will run in online mode, so you need to provided l
 `Note:` AMP (`--no_amp`) should be disabled with checkpointing to save memory during training of Swin_Unetr based models (`--use_checkpoint`).
 
 ### Testing 
-Our pre-trained models can be downloaded [here](drive) and tested with the `test.py` script. The path of the model weights 
+Our pre-trained models can be downloaded [here](https://drive.google.com/drive/folders/1S-GdryfNziYV4088jh4meVbqdWkdEwuL?usp=sharing) and tested with the `test.py` script. The path of the model weights 
 should be provided as `--checkpoint` (note that the model weight should be under the `state_dict` key). 
 
 Example:
