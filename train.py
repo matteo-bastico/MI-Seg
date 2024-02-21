@@ -79,5 +79,8 @@ if __name__ == "__main__":
     parser = add_model_argparse_args(parser)
     parser = add_data_argparse_args(parser)
     args = parser.parse_args()
+    # Fix the feature size because only vanilla_unet require a list, otherwise just int for the first layer
+    if len(args.feature_size) == 1:
+        args.feature_size = args.feature_size[0]
     print(args)
     main(args)

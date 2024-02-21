@@ -110,9 +110,9 @@ def add_model_argparse_args(parser: ArgumentParser):
 
 def add_data_argparse_args(parser: ArgumentParser):
     group = parser.add_argument_group("dataset(s)")
-    group.add_argument("--data_dirs", default=["dataset/MultiModalPelvic", "dataset/MultiModalPelvic"], type=str,
+    group.add_argument("--data_dirs", default=["dataset/MM-WHS", "dataset/MM-WHS"], type=str,
                        nargs='+', help="dataset directory(ies)")
-    group.add_argument('--json_lists', default=['CT.json', 'MR.json'], nargs='+',
+    group.add_argument('--json_lists', default=['CT_fold1.json', 'MR.json'], nargs='+',
                         help='Json list(s) of input dataset(s)', type=str)
     group.add_argument("--space_x", default=1.0, type=float, help="spacing in x direction")
     group.add_argument("--space_y", default=1.0, type=float, help="spacing in y direction")
