@@ -79,8 +79,8 @@ clinical images Segmentation using Conditional Models and Interleaved Training.
 </details>
 
 <!-- ABOUT THE PROJECT -->
-## About The Project
-Describe project here.
+<!--## About The Project
+Describe project here.-->
 <!--
 <p align="center">
     <img height=300px src="images/architecture.png">
