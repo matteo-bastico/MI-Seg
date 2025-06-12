@@ -8,20 +8,20 @@ from functools import partial
 import torch.distributed as dist
 from argparse import ArgumentParser
 from monai.metrics import LossMetric
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 from optuna.samplers import TPESampler
 from monai.transforms import AsDiscrete
 from monai.metrics.meandice import DiceMetric
 from data.multi_modal import get_loaders
 from utils.trainer import train_epoch, val_epoch
-from networks.utils.utils import model_from_argparse_args
+from networks.utils.misc import model_from_cfg
 from monai.inferers import sliding_window_inference
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn.parallel import DistributedDataParallel as DDP
 from optuna.storages import JournalStorage, JournalFileStorage
 from monai.metrics import SurfaceDistanceMetric, GeneralizedDiceScore
 from utils.parser import add_model_argparse_args, add_data_argparse_args, add_tune_argparse_args
-from utils.training_utils import loss_from_argparse_args, optimizer_from_argparse_args, scheduler_from_argparse_args
+from utils.training_utils import loss_from_cfg, optimizer_from_cfg, scheduler_from_cfg
 
 
 def save_checkpoint(model, epoch, logdir, filename="model.pt", best_acc=0, optimizer=None, scheduler=None, scaler=None):
@@ -55,8 +55,8 @@ def set_trail_config(trial, args):
         args.patience_scheduler = trial.suggest_int("patience_scheduler", 2, 10)
     # Model
     # Only if not encoder frozen or not pretrained
-    if not args.freeze_encoder and not args.pretrained:
-        if args.model_name == 'unet':
+    if not args.freeze_enc and not args.pretrained:
+        if args.model == 'unet':
             args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
             args.num_layers = trial.suggest_int("num_layers", 3, 5)
             # Change strides based on nulber of layers
@@ -67,11 +67,11 @@ def set_trail_config(trial, args):
             elif args.num_layers == 5:
                 args.strides = [2, 2, 2, 2]
             # args.num_res_units = trial.suggest_int("num_res_units", 2, 3)
-        elif args.model_name == "unetr":
+        elif args.model == "unetr":
             args.feature_size = trial.suggest_categorical("feature_size", [8, 16, 32])
             args.num_heads = trial.suggest_categorical("num_heads", [8, 12, 16])
             # args.hidden_size = trial.suggest_categorical("hidden_size", [512, 768, 1024])
-        elif args.model_name == 'swin_unetr':
+        elif args.model == 'swin_unetr':
             args.feature_size = trial.suggest_categorical("feature_size", [12, 24, 36])  # Divisible by 12
             args.num_heads = trial.suggest_categorical("num_heads", [2, 3, 4])  # Number of heads first layer
     return args
@@ -99,12 +99,12 @@ def objective(args, single_trial):
             id=args.study_name + "_" + str(trial.number),
             config=args  # Here config of experiment hyper-parameters
         )
-    model = model_from_argparse_args(args).to(args.device)
+    model = model_from_cfg(args).to(args.device)
     if args.distributed:
         # If encoder is freeze we never need to find unused parameters
-        find_unused_parameters = (args.vit_norm_name == "instance_cond" and not args.freeze_encoder) or \
-                                 (args.encoder_norm_name == "instance_cond" and not args.freeze_encoder) or \
-                                 args.decoder_norm_name == "instance_cond"
+        find_unused_parameters = (args.vit_norm_name == "instance_cond" and not args.freeze_enc) or \
+                                 (args.enc_norm_name == "instance_cond" and not args.freeze_enc) or \
+                                 args.dec_norm_name == "instance_cond"
         model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank,
                     find_unused_parameters=find_unused_parameters)
     # Overall dice metric
@@ -131,9 +131,9 @@ def objective(args, single_trial):
     post_label = AsDiscrete(to_onehot=args.out_channels)
     post_pred = AsDiscrete(argmax=True, to_onehot=args.out_channels)
     # Define loss criterion from argparse args
-    criterion = loss_from_argparse_args(args)
+    criterion = loss_from_cfg(args)
     # Define optimizer
-    optimizer = optimizer_from_argparse_args(args, model)
+    optimizer = optimizer_from_cfg(args, model)
     # Get dataloader for training
     args.test_mode = False
     train_loader, val_loader = get_loaders(args)
@@ -146,7 +146,7 @@ def objective(args, single_trial):
         overlap=args.infer_overlap,
     )
     # Get the lr scheduler
-    scheduler = scheduler_from_argparse_args(args, optimizer)
+    scheduler = scheduler_from_cfg(args, optimizer)
     scaler = None
     if args.amp:
         scaler = GradScaler()

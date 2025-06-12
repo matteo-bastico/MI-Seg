@@ -40,9 +40,23 @@ class SkipConnection(nn.Module):
             return torch.mul(x, y)
         raise NotImplementedError(f"Unsupported mode {self.mode}.")
 
-
+"""
 class SequentialWIthModalities(nn.Sequential):
     def forward(self, input, modalities=None):
         for module in self:
             input = module(input, modalities)
+        return input
+"""
+
+# Custom Sequential to accept modalities in forward
+class Sequential(nn.Sequential):
+    def forward(self, input, modalities=None):
+        # Iterate through modules and call them with the appropriate arguments
+        for module in self:
+            if hasattr(module, "forward") and module.forward.__code__.co_argcount == 3:
+                # If the 'forward' method supports three arguments (input, modalities)
+                input = module(input, modalities)
+            else:
+                # Otherwise, call 'forward' with only the input
+                input = module(input)
         return input

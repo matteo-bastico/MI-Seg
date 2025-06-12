@@ -20,6 +20,7 @@ import torch.nn as nn
 from networks.blocks.acti_norm import ADN
 from monai.networks.layers.convutils import same_padding, stride_minus_kernel_padding
 from monai.networks.layers.factories import Conv
+from ..layers.simplelayers import Sequential
 
 
 class Convolution(nn.Sequential):
@@ -275,7 +276,7 @@ class ResidualUnit(nn.Module):
         self.spatial_dims = spatial_dims
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.conv = nn.Sequential()
+        self.conv = Sequential()
         self.residual = nn.Identity()
         if not padding:
             padding = same_padding(kernel_size, dilation)
@@ -322,8 +323,10 @@ class ResidualUnit(nn.Module):
 
     def forward(self, x: torch.Tensor, modalities: None) -> torch.Tensor:
         res: torch.Tensor = self.residual(x)  # create the additive residual from x
-        # cx: torch.Tensor = self.conv(x, modalities)  # apply x to sequence of operations
+        cx: torch.Tensor = self.conv(x, modalities)  # apply x to sequence of operations
+        """
         cx: torch.Tensor = x
         for conv in self.conv:
             cx = conv(cx, modalities)
+        """
         return cx + res  # add the residual to the output

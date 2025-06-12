@@ -4,7 +4,7 @@ from functools import partial
 from argparse import ArgumentParser
 from monai import transforms
 from monai.transforms import AsDiscrete
-from networks.utils.utils import model_from_argparse_args
+from networks.utils.misc import model_from_cfg
 from monai.inferers import sliding_window_inference
 from utils.parser import add_model_argparse_args
 from monai.transforms.utils import allow_missing_keys_mode
@@ -35,7 +35,7 @@ def remap_tensor(tensor, map_dict):
 def main(args):
     # Model loading here
     checkpoint = torch.load(args.checkpoint, map_location=lambda storage, loc: storage)
-    model = model_from_argparse_args(args)
+    model = model_from_cfg(args)
     model_weights = checkpoint["state_dict"]
     model.load_state_dict(model_weights)
     model = model.to(args.device)

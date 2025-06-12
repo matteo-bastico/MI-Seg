@@ -1,87 +1,123 @@
 import torch
 from monai.losses import DiceCELoss, DiceFocalLoss, GeneralizedDiceFocalLoss
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
+from losses import PartialLoss
 
-
-def loss_from_argparse_args(args):
-    if args.criterion == "dice_focal":
+def loss_from_cfg(cfg):
+    """
+    if hasattr(cfg, "partial"):
+        if cfg.criterion == "dice_focal":
+            # In the loss we always include background because it can be important (especially with focal loss)
+            criterion = PartialDiceFocalLoss(
+                to_onehot_y=True,
+                softmax=True,
+                squared_pred=cfg.squared_pred,
+                smooth_nr=cfg.smooth_nr,
+                smooth_dr=cfg.smooth_dr,
+                mode=cfg.partial,
+                regularize_unlabeled=cfg.regularize_unlabeled if hasattr(cfg, "regularize_unlabeled") else False,
+                lambda_reg=cfg.lambda_reg if hasattr(cfg, "lambda_reg") else 1.0,
+            )
+        elif cfg.criterion == "dice_ce":
+            criterion = PartialDiceCELoss(
+                to_onehot_y=True,
+                softmax=True,
+                squared_pred=cfg.squared_pred,
+                smooth_nr=cfg.smooth_nr,
+                smooth_dr=cfg.smooth_dr,
+                mode=cfg.partial,
+                regularize_unlabeled=cfg.regularize_unlabeled if hasattr(cfg, "regularize_unlabeled") else False,
+                lambda_reg=cfg.lambda_reg if hasattr(cfg, "lambda_reg") else 1.0,
+            )
+        else:
+            raise ValueError("Criterion {} not implemented for partial loss, please chose dice_focal or dice_ce.".format(cfg.criterion))
+    else:
+    """
+    if cfg.criterion == "dice_focal":
         # In the loss we always include background because it can be important (especially with focal loss)
         criterion = DiceFocalLoss(
-            # include_background=not args.no_include_background,
             to_onehot_y=True,
             softmax=True,
-            squared_pred=True,
-            smooth_nr=args.smooth_nr,
-            smooth_dr=args.smooth_dr
+            squared_pred=cfg.squared_pred,
+            smooth_nr=cfg.smooth_nr,
+            smooth_dr=cfg.smooth_dr
         )
-    elif args.criterion == "dice_ce":
+    elif cfg.criterion == "dice_ce":
         criterion = DiceCELoss(
-            # include_background=not args.no_include_background,
             to_onehot_y=True,
             softmax=True,
-            squared_pred=args.squared_pred,
-            smooth_nr=args.smooth_nr,
-            smooth_dr=args.smooth_dr
+            squared_pred=cfg.squared_pred,
+            smooth_nr=cfg.smooth_nr,
+            smooth_dr=cfg.smooth_dr
         )
-    elif args.criterion == "generalized_dice_focal":
+    elif cfg.criterion == "generalized_dice_focal":
         criterion = GeneralizedDiceFocalLoss(
-            # include_background=not args.no_include_backgound,
             to_onehot_y=True,
             softmax=True,
-            smooth_nr=args.smooth_nr,
-            smooth_dr=args.smooth_dr
+            smooth_nr=cfg.smooth_nr,
+            smooth_dr=cfg.smooth_dr
         )
     else:
-        raise ValueError("Criterion {} not implemented, please chose another optimizer.".format(args.criterion))
+        raise ValueError("Criterion {} not implemented, please chose another optimizer.".format(cfg.criterion))
+
+    if hasattr(cfg, "partial"):
+        criterion = PartialLoss(
+            loss=criterion,
+            mode=cfg.partial,
+            regularize_unlabeled=cfg.regularize_unlabeled if hasattr(cfg, "regularize_unlabeled") else False,
+            lambda_reg=cfg.lambda_reg if hasattr(cfg, "lambda_reg") else 1.0,
+            ensure_softmax=True
+        )
+
     return criterion
 
 
-def optimizer_from_argparse_args(args, model):
-    if args.optim_name == "adam":
+def optimizer_from_cfg(cfg, model):
+    if cfg.optim_name == "adam":
         optimizer = torch.optim.Adam(
             model.parameters(),
-            lr=args.lr,
-            weight_decay=args.reg_weight
+            lr=cfg.lr,
+            weight_decay=cfg.reg_weight
         )
-    elif args.optim_name == "adamw":
+    elif cfg.optim_name == "adamw":
         optimizer = torch.optim.AdamW(
             model.parameters(),
-            lr=args.lr,
-            weight_decay=args.reg_weight
+            lr=cfg.lr,
+            weight_decay=cfg.reg_weight
         )
-    elif args.optim_name == "sgd":
+    elif cfg.optim_name == "sgd":
         optimizer = torch.optim.SGD(
             model.parameters(),
-            lr=args.lr,
-            momentum=args.momentum,
+            lr=cfg.lr,
+            momentum=cfg.momentum,
             nesterov=True,
-            weight_decay=args.reg_weight
+            weight_decay=cfg.reg_weight
         )
     else:
-        raise ValueError("Optimization {} not implemented, please chose another optimizer.".format(args.optim_name))
+        raise ValueError("Optimization {} not implemented, please chose another optimizer.".format(cfg.optim_name))
     return optimizer
 
 
-def scheduler_from_argparse_args(args, optimizer):
-    if args.scheduler == 'warmup_cosine':
+def scheduler_from_cfg(cfg, optimizer):
+    if cfg.scheduler == 'warmup_cosine':
         scheduler = WarmupCosineSchedule(
             optimizer=optimizer,
-            warmup_steps=args.warmup_epochs,
-            t_total=args.max_epochs,
-            cycles=args.cycles
+            warmup_steps=cfg.warmup_epochs,
+            t_total=cfg.epochs,
+            cycles=cfg.cycles
         )
-    elif args.scheduler == 'cosine':
+    elif cfg.scheduler == 'cosine':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer=optimizer,
-            T_max=args.t_max
+            T_max=cfg.t_max
         )
-    elif args.scheduler == 'reduce_on_plateau':
+    elif cfg.scheduler == 'reduce_on_plateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer=optimizer,
-            patience=args.patience_scheduler,
+            patience=cfg.patience_scheduler,
         )
-    elif args.scheduler == 'none' or args.scheduler is None:
+    elif cfg.scheduler == 'none' or cfg.scheduler is None:
         scheduler = None
     else:
-        raise ValueError("Scheduler {} not implemented, please chose another optimizer.".format(args.scheduler))
+        raise ValueError("Scheduler {} not implemented, please chose another optimizer.".format(cfg.scheduler))
     return scheduler

@@ -1,4 +1,6 @@
-from typing import Sequence, Union, Tuple
+from __future__ import annotations
+
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
@@ -30,19 +32,19 @@ class SwinTransformerBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            dim: int,
-            num_heads: int,
-            window_size: Sequence[int],
-            shift_size: Sequence[int],
-            mlp_ratio: float = 4.0,
-            qkv_bias: bool = True,
-            drop: float = 0.0,
-            attn_drop: float = 0.0,
-            drop_path: float = 0.0,
-            act_layer: str = "GELU",
-            use_checkpoint: bool = False,
-            norm_type: Union[Tuple, str] = "layer",
+        self,
+        dim: int,
+        num_heads: int,
+        window_size: Sequence[int],
+        shift_size: Sequence[int],
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = True,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        act_layer: str = "GELU",
+        use_checkpoint: bool = False,
+        norm_name: tuple | str = "layer",
     ) -> None:
         """
         Args:
@@ -57,7 +59,7 @@ class SwinTransformerBlock(nn.Module):
             drop_path: stochastic depth rate.
             act_layer: activation layer.
             use_checkpoint: use gradient checkpointing for reduced memory usage.
-            norm_type: normalization layers type
+            norm_name: normalization layers type
         """
 
         super().__init__()
@@ -67,21 +69,17 @@ class SwinTransformerBlock(nn.Module):
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
         self.use_checkpoint = use_checkpoint
-        self.norm_type = norm_type[0] if isinstance(norm_type, Tuple) else norm_type
+        self.norm_name = norm_name[0] if isinstance(norm_name, tuple) else norm_name
         # Automatic adding normalized_shape for layer normalization
-        if self.norm_type == "layer":
-            if isinstance(norm_type, Tuple):
-                norm_type[1]["normalized_shape"] = dim
+        if self.norm_name == "layer":
+            if isinstance(norm_name, tuple):
+                norm_name[1]["normalized_shape"] = dim
             else:
-                norm_type = (norm_type, {"normalized_shape": dim})
+                norm_name = (norm_name, {"normalized_shape": dim})
 
-        self.norm1 = get_norm_layer(name=norm_type,
+        self.norm1 = get_norm_layer(name=norm_name,
                                     spatial_dims=len(self.window_size),  # This is same as spatial dimensions
                                     channels=dim)
-        self.norm2 = get_norm_layer(name=norm_type,
-                                    spatial_dims=len(self.window_size),
-                                    channels=dim)
-
         self.attn = WindowAttention(
             dim,
             window_size=self.window_size,
@@ -92,7 +90,9 @@ class SwinTransformerBlock(nn.Module):
         )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-        # self.norm2 = norm_layer(dim)
+        self.norm2 = get_norm_layer(name=norm_name,
+                                    spatial_dims=len(self.window_size),
+                                    channels=dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(hidden_size=dim, mlp_dim=mlp_hidden_dim, act=act_layer, dropout_rate=drop, dropout_mode="swin")
 
@@ -121,7 +121,7 @@ class SwinTransformerBlock(nn.Module):
             _, dp, hp, wp, _ = x.shape
             dims = [b, dp, hp, wp]
 
-        elif len(x_shape) == 4:
+        else:  # if len(x_shape) == 4:
             # Normalize
             if isinstance(self.norm1, LayerNorm):
                 x = self.norm1(x)
@@ -226,7 +226,7 @@ class SwinTransformerBlock(nn.Module):
             self.norm1.weight.copy_(weights["state_dict"][root + block_names[0]])
             self.norm1.bias.copy_(weights["state_dict"][root + block_names[1]])
             self.attn.relative_position_bias_table.copy_(weights["state_dict"][root + block_names[2]])
-            self.attn.relative_position_index.copy_(weights["state_dict"][root + block_names[3]])
+            self.attn.relative_position_index.copy_(weights["state_dict"][root + block_names[3]])  # type: ignore[operator]
             self.attn.qkv.weight.copy_(weights["state_dict"][root + block_names[4]])
             self.attn.qkv.bias.copy_(weights["state_dict"][root + block_names[5]])
             self.attn.proj.weight.copy_(weights["state_dict"][root + block_names[6]])
@@ -241,12 +241,12 @@ class SwinTransformerBlock(nn.Module):
     def forward(self, x, mask_matrix, modalities=None):
         shortcut = x
         if self.use_checkpoint:
-            x = checkpoint.checkpoint(self.forward_part1, x, mask_matrix, modalities)
+            x = checkpoint.checkpoint(self.forward_part1, x, mask_matrix, modalities, use_reentrant=False)
         else:
             x = self.forward_part1(x, mask_matrix, modalities)
         x = shortcut + self.drop_path(x)
         if self.use_checkpoint:
-            x = x + checkpoint.checkpoint(self.forward_part2, x, modalities)
+            x = x + checkpoint.checkpoint(self.forward_part2, x, modalities, use_reentrant=False)
         else:
             x = x + self.forward_part2(x, modalities)
         return x

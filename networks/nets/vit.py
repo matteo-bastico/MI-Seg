@@ -1,23 +1,14 @@
-# Copyright (c) MONAI Consortium
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# From https://github.com/Project-MONAI/MONAI/blob/dev/monai/networks/nets/vit.py
 
-
-from typing import Sequence, Union, Tuple
+from __future__ import annotations
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
 
 from monai.utils import optional_import
 from monai.networks.blocks.patchembedding import PatchEmbeddingBlock
-from ..blocks.transformer_block import TransformerBlock
+from ..blocks.transformerblock import TransformerBlock
 from ..layers.gradient_reversal import GradientReversal
 from ..layers.utils import get_norm_layer
 from ..norms.conditional_instance_norm import _ConditionalInstanceNorm
@@ -39,52 +30,56 @@ class ViT(nn.Module):
     def __init__(
         self,
         in_channels: int,
-        img_size: Union[Sequence[int], int],
-        patch_size: Union[Sequence[int], int],
+        img_size: Sequence[int] | int,
+        patch_size: Sequence[int] | int,
         hidden_size: int = 768,
         mlp_dim: int = 3072,
         num_layers: int = 12,
         num_heads: int = 12,
-        pos_embed: str = "conv",
+        proj_type: str = "conv",
+        pos_embed_type: str = "learnable",
         classification: bool = False,
         num_classes: int = 2,
         dropout_rate: float = 0.0,
         spatial_dims: int = 3,
         post_activation="Tanh",
         qkv_bias: bool = False,
-        norm_type: Union[Tuple, str] = "layer",
-        classification_reverse_gradient: bool = False,
-        alpha_reversal: float = 1.
+        save_attn: bool = False,
+        norm_name: tuple | str = "layer"
     ) -> None:
         """
         Args:
-            in_channels: dimension of input channels.
-            img_size: dimension of input image.
-            patch_size: dimension of patch size.
-            hidden_size: dimension of hidden layer.
-            mlp_dim: dimension of feedforward layer.
-            num_layers: number of transformer blocks.
-            num_heads: number of attention heads.
-            pos_embed: position embedding layer type.
-            classification: bool argument to determine if classification is used.
-            num_classes: number of classes if classification is used.
-            dropout_rate: faction of the input units to drop.
-            spatial_dims: number of spatial dimensions.
-            post_activation: add a final acivation function to the classification head when `classification` is True.
-                Default to "Tanh" for `nn.Tanh()`. Set to other values to remove this function.
-            qkv_bias: apply bias to the qkv linear layer in self attention block
-            norm_type: feature normalization type and arguments for decoder layers
+            in_channels (int): dimension of input channels.
+            img_size (Union[Sequence[int], int]): dimension of input image.
+            patch_size (Union[Sequence[int], int]): dimension of patch size.
+            hidden_size (int, optional): dimension of hidden layer. Defaults to 768.
+            mlp_dim (int, optional): dimension of feedforward layer. Defaults to 3072.
+            num_layers (int, optional): number of transformer blocks. Defaults to 12.
+            num_heads (int, optional): number of attention heads. Defaults to 12.
+            proj_type (str, optional): patch embedding layer type. Defaults to "conv".
+            pos_embed_type (str, optional): position embedding type. Defaults to "learnable".
+            classification (bool, optional): bool argument to determine if classification is used. Defaults to False.
+            num_classes (int, optional): number of classes if classification is used. Defaults to 2.
+            dropout_rate (float, optional): fraction of the input units to drop. Defaults to 0.0.
+            spatial_dims (int, optional): number of spatial dimensions. Defaults to 3.
+            post_activation (str, optional): add a final acivation function to the classification head
+                when `classification` is True. Default to "Tanh" for `nn.Tanh()`.
+                Set to other values to remove this function.
+            qkv_bias (bool, optional): apply bias to the qkv linear layer in self attention block. Defaults to False.
+            save_attn (bool, optional): to make accessible the attention in self attention block. Defaults to False.
+            norm_name: feature normalization type and arguments for decoder layers
 
         Examples::
 
             # for single channel input with image size of (96,96,96), conv position embedding and segmentation backbone
-            >>> net = ViT(in_channels=1, img_size=(96,96,96), pos_embed='conv')
+            >>> net = ViT(in_channels=1, img_size=(96,96,96), proj_type='conv', pos_embed_type='sincos')
 
             # for 3-channel with image size of (128,128,128), 24 layers and classification backbone
-            >>> net = ViT(in_channels=3, img_size=(128,128,128), pos_embed='conv', classification=True)
+            >>> net = ViT(in_channels=3, img_size=(128,128,128), proj_type='conv', pos_embed_type='sincos', classification=True)
 
             # for 3-channel with image size of (224,224), 12 layers and classification backbone
-            >>> net = ViT(in_channels=3, img_size=(224,224), pos_embed='conv', classification=True, spatial_dims=2)
+            >>> net = ViT(in_channels=3, img_size=(224,224), proj_type='conv', pos_embed_type='sincos', classification=True,
+            >>>           spatial_dims=2)
 
         """
 
@@ -95,8 +90,8 @@ class ViT(nn.Module):
 
         if hidden_size % num_heads != 0:
             raise ValueError("hidden_size should be divisible by num_heads.")
-        # Save norm_type from argument
-        self.norm_type = norm_type[0] if isinstance(norm_type, Tuple) else norm_type
+        # Save norm_name from argument
+        self.norm_name = norm_name[0] if isinstance(norm_name, tuple) else norm_name
         self.classification = classification
         self.patch_embedding = PatchEmbeddingBlock(
             in_channels=in_channels,
@@ -104,7 +99,8 @@ class ViT(nn.Module):
             patch_size=patch_size,
             hidden_size=hidden_size,
             num_heads=num_heads,
-            pos_embed=pos_embed,
+            proj_type=proj_type,
+            pos_embed_type=pos_embed_type,
             dropout_rate=dropout_rate,
             spatial_dims=spatial_dims,
         )
@@ -114,62 +110,35 @@ class ViT(nn.Module):
                               num_heads,
                               dropout_rate,
                               qkv_bias,
-                              norm_type=norm_type) for i in range(num_layers)]
+                              save_attn,
+                              norm_name=norm_name) for i in range(num_layers)]
         )
 
         # Automatic adding normalized_shape for layer normalization
-        if self.norm_type == "layer":
-            if isinstance(norm_type, Tuple):
-                norm_type[1]["normalized_shape"] = hidden_size
+        if self.norm_name == "layer":
+            if isinstance(norm_name, tuple):
+                norm_name[1]["normalized_shape"] = hidden_size
             else:
-                norm_type = (norm_type, {"normalized_shape": hidden_size})
+                norm_name = (norm_name, {"normalized_shape": hidden_size})
 
         # spatial_dims is 1 because (B, N_p, F)
-        self.norm = get_norm_layer(name=norm_type,
+        self.norm = get_norm_layer(name=norm_name,
                                    spatial_dims=1,
                                    channels=hidden_size)
 
         if self.classification:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, hidden_size))
             if post_activation == "Tanh":
-                if classification_reverse_gradient:
-                    self.classification_head = nn.Sequential(
-                        GradientReversal(alpha=alpha_reversal),
-                        nn.Linear(hidden_size, num_classes),
-                        nn.Tanh()
-                    )
-                else:
-                    self.classification_head = nn.Sequential(
-                        nn.Linear(hidden_size, num_classes),
-                        nn.Tanh()
-                    )
-            elif post_activation == "Softmax":
-                if classification_reverse_gradient:
-                    self.classification_head = nn.Sequential(
-                        GradientReversal(alpha=alpha_reversal),
-                        nn.Linear(hidden_size, num_classes),
-                        nn.Softmax(dim=1)
-                    )
-                else:
-                    self.classification_head = nn.Sequential(
-                        nn.Linear(hidden_size, num_classes),
-                        nn.Softmax(dim=1)
-                    )
+                self.classification_head = nn.Sequential(nn.Linear(hidden_size, num_classes), nn.Tanh())
             else:
-                if classification_reverse_gradient:
-                    self.classification_head = nn.Sequential(
-                        GradientReversal(alpha=alpha_reversal),
-                        nn.Linear(hidden_size, num_classes)  # type: ignore
-                    )
-                else:
-                    self.classification_head = nn.Linear(hidden_size, num_classes)  # type: ignore
+                self.classification_head = nn.Linear(hidden_size, num_classes)  # type: ignore
 
     def forward(self,
                 x,
                 modalities=None):
 
         if isinstance(self.norm, _ConditionalInstanceNorm) and modalities is None:
-            raise ValueError("Modalities must be passed to the forward step when encoder_norm_type is 'instance_cond'.")
+            raise ValueError("Modalities must be passed to the forward step when norm_name is 'instance_cond'.")
 
         x = self.patch_embedding(x)
         if hasattr(self, "cls_token"):
@@ -181,7 +150,7 @@ class ViT(nn.Module):
             x = blk(x, modalities)
             hidden_states_out.append(x)
         # Normalize
-        if self.norm_type == "layer":
+        if self.norm_name == "layer":
             x = self.norm(x)
         else:
             # All other norms types need rearrange

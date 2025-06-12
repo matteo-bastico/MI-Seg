@@ -169,7 +169,7 @@ data and logger-specific arguments. To have a full list of the possible argument
 
 An example of C-Swin-UNETR training on single GPU is shown in the following
 ```
-python train.py --model_name=swin_unetr --out_channels=6 --feature_size=48 --num_heads=3 --accelerator=gpu --devices=1 --max_epochs=2500 --encoder_norm_name=instance_cond --vit_norm_name=instance_cond --lr=1e-4 --batch_size=1 --patches_training_sample=1
+python train.py --model=swin_unetr --out_channels=6 --feature_size=48 --num_heads=3 --accelerator=gpu --devices=1 --max_epochs=2500 --enc_norm_name=instance_cond --vit_norm_name=instance_cond --lr=1e-4 --batch_size=1 --patches_training_sample=1
 ``` 
 
 The available models are unet, unetr and swin_unetr and pre_swin_unetr (in this case the [pretrained model](https://github.com/Project-MONAI/MONAI-extra-test-data/releases/download/0.8.1/model_swinvit.pt) of monai
@@ -188,7 +188,7 @@ should be provided as `--checkpoint` (note that the model weight should be under
 Example:
 
 ```
-python test.py --out_channels=6 --model_name=swin_unetr --num_workers=2 --feature_size=48  --num_heads=3 --encoder_norm_name=instance_cond --vit_norm_name=instance_cond --checkpoint=experiments/<path>
+python test.py --out_channels=6 --model=swin_unetr --num_workers=2 --feature_size=48  --num_heads=3 --enc_norm_name=instance_cond --vit_norm_name=instance_cond --checkpoint=experiments/<path>
 ```
 
 ### Hyper-parameters Optimization
@@ -200,7 +200,7 @@ The hyper-parameters grid is set in automatic for each model as stated in our pa
 The script will run 10 trials, with TPE optimizer and ASHA pruner, and save the in the `MI-Seg.log` log file (if Slurm) or `MI-Seg.sqlite` (if not Slurm).
 
 ```
-python -u tune.py --num_workers=2 --out_channels=6 --no_include_background --criterion=generalized_dice_focal --scheduler=warmup_cosine --model_name=swin_unetr --n_trials=10 --study_name=c-swin-unetr --max_epochs=2500 --check_val_every_n_epoch=50 --batch_size=1 --patches_training_sample=4 --iters_to_accumulate=4 --cycles=0.5 --storage_name=MI-Seg --min_lr=1e-5 --max_lr=1e-3 --vit_norm_name=instance_cond --encoder_norm_name=instance_cond  --port=23456
+python -u tune.py --num_workers=2 --out_channels=6 --no_include_background --criterion=generalized_dice_focal --scheduler=warmup_cosine --model=swin_unetr --n_trials=10 --study_name=c-swin-unetr --max_epochs=2500 --check_val_every_n_epoch=50 --batch_size=1 --patches_training_sample=4 --iters_to_accumulate=4 --cycles=0.5 --storage_name=MI-Seg --min_lr=1e-5 --max_lr=1e-3 --vit_norm_name=instance_cond --enc_norm_name=instance_cond  --port=23456
 ```
 
 The script can be run multiple time with the same `--storage_name` in order to continue a previous tuning.
@@ -222,20 +222,22 @@ can be downloaded [here](https://drive.google.com/drive/folders/1S-GdryfNziYV408
 For instance, to produce the segmentation on the test dataset using the provided weights you can run for Conditional UNet:
 
 ```
-python predict_whs.py --model=unet_vanilla --encoder_norm_name=instance_cond --feature_size 16 64 128 256 512 --num_res_units=3 --strides 1 2 2 2 1 --out_channels=8 --checkpoint=path/to/weights.pt --result_dir=path/to/result
+python predict_whs.py --model=unet_vanilla --enc_norm_name=instance_cond --feature_size 16 64 128 256 512 --num_res_units=3 --strides 1 2 2 2 1 --out_channels=8 --checkpoint=path/to/weights.pt --result_dir=path/to/result
 ```
 
 or for Conditional Swin-UNETR:
 
 ```
-python -u predict_whs.py --model=swin_unetr --encoder_norm_name=instance_cond --vit_norm_name=instance_cond --feature_size=36 --num_heads=4 --out_channels=8 --checkpoint=path/to/weights.pt --result_dir=path/to/result
+python -u predict_whs.py --model=swin_unetr --enc_norm_name=instance_cond --vit_norm_name=instance_cond --feature_size=36 --num_heads=4 --out_channels=8 --checkpoint=path/to/weights.pt --result_dir=path/to/result
 ```
 
 <!-- ROADMAP -->
 ## Roadmap
 
 - [ ] Implement LN for convolutional layers of Monai (testing purposes)
-- [ ] Implement distributed tuning on not-Slurm environment
+- [ ] Enable sw_batch_size > 1 with modality
+- [ ] Implement modality-aware BasicUNet from https://github.com/Project-MONAI/MONAI/blob/dev/monai/networks/nets/basic_unet.py
+- [x] Implement distributed training on general environment
 <!--
 - [ ] Feature 2
 - [ ] Feature 3

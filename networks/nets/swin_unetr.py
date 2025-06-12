@@ -1,15 +1,7 @@
-# Copyright (c) MONAI Consortium
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Fromm https://github.com/Project-MONAI/MONAI/blob/dev/monai/networks/nets/swin_unetr.py
 
-from typing import Sequence, Tuple, Union
+from __future__ import annotations
+from collections.abc import Sequence
 
 import numpy as np
 import torch
@@ -20,7 +12,7 @@ from ..blocks.unetr_block import UnetrBasicBlock, UnetrUpBlock
 from monai.utils import ensure_tuple_rep, look_up_option, optional_import
 from ..blocks.patch_merging import PatchMerging, PatchMergingV2
 from ..nets.swin_transformer import SwinTransformer
-from networks.norms.utils import parse_normalization
+from monai.utils.deprecate_utils import deprecated_arg
 
 
 rearrange, _ = optional_import("einops", name="rearrange")
@@ -40,44 +32,67 @@ class SwinUNETR(nn.Module):
     <https://arxiv.org/abs/2201.01266>"
     """
 
+    @deprecated_arg(
+        name="img_size",
+        since="1.3",
+        removed="1.5",
+        msg_suffix="The img_size argument is not required anymore and "
+                   "checks on the input size are run during forward().",
+    )
     def __init__(
         self,
-        img_size: Union[Sequence[int], int],
+        img_size: Sequence[int] | int,
         in_channels: int,
         out_channels: int,
+        patch_size: int = 2,
         depths: Sequence[int] = (2, 2, 2, 2),
         num_heads: Sequence[int] = (3, 6, 12, 24),
+        window_size: Sequence[int] | int = 7,
+        qkv_bias: bool = True,
+        mlp_ratio: float = 4.0,
         feature_size: int = 24,
         drop_rate: float = 0.0,
         attn_drop_rate: float = 0.0,
         dropout_path_rate: float = 0.0,
         normalize: bool = True,
+        patch_norm: bool = False,
         use_checkpoint: bool = False,
         spatial_dims: int = 3,
-        downsample="merging",
-        vit_norm_name: Union[Tuple, str] = "layer",
-        decoder_norm_name: Union[Tuple, str] = "instance",
-        encoder_norm_name: Union[Tuple, str] = "instance",
-        freeze_encoder: bool = False
+        downsample: str | nn.Module = "merging",
+        vit_norm: tuple | str = "layer",
+        dec_norm: tuple | str = "instance",
+        enc_norm: tuple | str = "instance",
+        freeze_enc: bool = False,
+        use_v2: bool = False,
     ) -> None:
         """
         Args:
-            img_size: dimension of input image.
+            img_size: spatial dimension of input image.
+                This argument is only used for checking that the input image size is divisible by the patch size.
+                The tensor passed to forward() can have a dynamic shape as long as its spatial dimensions are divisible by 2**5.
+                It will be removed in an upcoming version.
             in_channels: dimension of input channels.
             out_channels: dimension of output channels.
+            patch_size: size of the patch token.
             feature_size: dimension of network feature size.
             depths: number of layers in each stage.
             num_heads: number of attention heads.
+            window_size: local window size.
+            qkv_bias: add a learnable bias to query, key, value.
+            mlp_ratio: ratio of mlp hidden dim to embedding dim.
             norm_name: feature normalization type and arguments.
             drop_rate: dropout rate.
             attn_drop_rate: attention dropout rate.
             dropout_path_rate: drop path rate.
             normalize: normalize output intermediate features in each stage.
+            norm_layer: normalization layer.
+            patch_norm: whether to apply normalization to the patch embedding. Default is False.
             use_checkpoint: use gradient checkpointing for reduced memory usage.
             spatial_dims: number of spatial dims.
             downsample: module used for downsampling, available options are `"mergingv2"`, `"merging"` and a
                 user-specified `nn.Module` following the API defined in :py:class:`monai.networks.nets.PatchMerging`.
                 The default is currently `"merging"` (the original version defined in v0.9.0).
+            use_v2: using swinunetr_v2, which adds a residual convolution block at the beggining of each swin stage.
 
         Examples::
 
@@ -94,17 +109,16 @@ class SwinUNETR(nn.Module):
 
         super().__init__()
 
-        img_size = ensure_tuple_rep(img_size, spatial_dims)
-        patch_size = ensure_tuple_rep(2, spatial_dims)
-        window_size = ensure_tuple_rep(7, spatial_dims)
-
-        if not (spatial_dims == 2 or spatial_dims == 3):
+        if spatial_dims not in (2, 3):
             raise ValueError("spatial dimension should be 2 or 3.")
 
-        for m, p in zip(img_size, patch_size):
-            for i in range(5):
-                if m % np.power(p, i + 1) != 0:
-                    raise ValueError("input image size (img_size) should be divisible by stage-wise image resolution.")
+        self.patch_size = patch_size
+
+        img_size = ensure_tuple_rep(img_size, spatial_dims)
+        patch_sizes = ensure_tuple_rep(self.patch_size, spatial_dims)
+        window_size = ensure_tuple_rep(window_size, spatial_dims)
+
+        self._check_input_size(img_size)
 
         if not (0 <= drop_rate <= 1):
             raise ValueError("dropout rate should be between 0 and 1.")
@@ -118,13 +132,12 @@ class SwinUNETR(nn.Module):
         if feature_size % 12 != 0:
             raise ValueError("feature_size should be divisible by 12.")
 
-        # TODO: Add implementation for layer norm in Unetr Blocks
-        # If Tuple is (norm_type, args1, arg2, ...) else norm_type
-        self.vit_norm_name = vit_norm_name[0] if isinstance(vit_norm_name, Tuple) else vit_norm_name
-        self.decoder_norm_name = decoder_norm_name[0] if isinstance(decoder_norm_name, Tuple) else decoder_norm_name
-        self.encoder_norm_name = encoder_norm_name[0] if isinstance(encoder_norm_name, Tuple) else encoder_norm_name
+        self.vit_norm = vit_norm[0] if isinstance(vit_norm, tuple) else vit_norm
+        self.dec_norm = dec_norm[0] if isinstance(dec_norm, tuple) else dec_norm
+        self.enc_norm = enc_norm[0] if isinstance(enc_norm, tuple) else enc_norm
 
-        if self.decoder_norm_name == "layer" or self.encoder_norm_name == "layer":
+        # TODO: Add implementation for layer norm in Unetr Blocks
+        if self.dec_norm == "layer" or self.enc_norm == "layer":
             raise ValueError("Layer normalization not yet implemented for encoder and decoder blocks, please "
                              "select another normalization.")
 
@@ -134,18 +147,20 @@ class SwinUNETR(nn.Module):
             in_chans=in_channels,
             embed_dim=feature_size,
             window_size=window_size,
-            patch_size=patch_size,
+            patch_size=patch_sizes,
             depths=depths,
             num_heads=num_heads,
-            mlp_ratio=4.0,
-            qkv_bias=True,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
             drop_rate=drop_rate,
             attn_drop_rate=attn_drop_rate,
             drop_path_rate=dropout_path_rate,
+            patch_norm=patch_norm,
             use_checkpoint=use_checkpoint,
             spatial_dims=spatial_dims,
             downsample=look_up_option(downsample, MERGING_MODE) if isinstance(downsample, str) else downsample,
-            norm_type=vit_norm_name
+            norm_name=vit_norm,
+            use_v2=use_v2,
         )
 
         self.encoder1 = UnetrBasicBlock(
@@ -154,7 +169,7 @@ class SwinUNETR(nn.Module):
             out_channels=feature_size,
             kernel_size=3,
             stride=1,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             res_block=True,
         )
 
@@ -164,7 +179,7 @@ class SwinUNETR(nn.Module):
             out_channels=feature_size,
             kernel_size=3,
             stride=1,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             res_block=True,
         )
 
@@ -174,7 +189,7 @@ class SwinUNETR(nn.Module):
             out_channels=2 * feature_size,
             kernel_size=3,
             stride=1,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             res_block=True,
         )
 
@@ -184,7 +199,7 @@ class SwinUNETR(nn.Module):
             out_channels=4 * feature_size,
             kernel_size=3,
             stride=1,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             res_block=True,
         )
 
@@ -194,7 +209,7 @@ class SwinUNETR(nn.Module):
             out_channels=16 * feature_size,
             kernel_size=3,
             stride=1,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             res_block=True,
         )
 
@@ -204,7 +219,7 @@ class SwinUNETR(nn.Module):
             out_channels=8 * feature_size,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=True,
         )
 
@@ -214,7 +229,7 @@ class SwinUNETR(nn.Module):
             out_channels=feature_size * 4,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=True,
         )
 
@@ -224,7 +239,7 @@ class SwinUNETR(nn.Module):
             out_channels=feature_size * 2,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=True,
         )
         self.decoder2 = UnetrUpBlock(
@@ -233,7 +248,7 @@ class SwinUNETR(nn.Module):
             out_channels=feature_size,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=True,
         )
 
@@ -243,114 +258,129 @@ class SwinUNETR(nn.Module):
             out_channels=feature_size,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=True,
         )
 
         self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
         # Freeze Encoder
-        if freeze_encoder:
+        if freeze_enc:
             self.swinViT.requires_grad_(False)
-            self.encoder1.requires_grad_(False)
-            self.encoder2.requires_grad_(False)
-            self.encoder3.requires_grad_(False)
-            self.encoder4.requires_grad_(False)
-            self.encoder10.requires_grad_(False)
+            self.enc1.requires_grad_(False)
+            self.enc2.requires_grad_(False)
+            self.enc3.requires_grad_(False)
+            self.enc4.requires_grad_(False)
+            self.enc10.requires_grad_(False)
 
     @classmethod
-    def from_argparse_args(cls, args):
+    def from_cfg(cls, cfg):
+        """
         # Set normalizations
-        vit_norm_name = parse_normalization(args.vit_norm_name,
-                                            not args.vit_norm_no_affine,
-                                            args.num_groups,
-                                            args.num_styles)
-        decoder_norm_name = parse_normalization(args.decoder_norm_name,
-                                                not args.decoder_norm_no_affine,
-                                                args.num_groups,
-                                                args.num_styles)
-        encoder_norm_name = parse_normalization(args.encoder_norm_name,
-                                                not args.encoder_norm_no_affine,
-                                                args.num_groups,
-                                                args.num_styles)
-
-        if len(args.depth_swin_block) == 1:
-            depths = (args.depth_swin_block[0],) * 4
+        vit_norm = parse_normalization(cfg.vit_norm,
+                                            cfg.vit_norm_affine,
+                                            cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                            cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        dec_norm = parse_normalization(cfg.dec_norm,
+                                                cfg.dec_norm_affine,
+                                                cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                                cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        enc_norm = parse_normalization(cfg.enc_norm,
+                                                cfg.enc_norm_affine,
+                                                cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                                cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        if len(cfg.depth_swin_block) == 1:
+            depths = (cfg.depth_swin_block[0],) * 4
         else:
-            assert len(args.depth_swin_block) == 4, "The length of depth_swin_block should be 4"
-            depths = args.depth_swin_block
-
-        num_heads = tuple(2**i*args.num_heads for i in range(0, 4))
+            assert len(cfg.depth_swin_block) == 4, "The length of depth_swin_block should be 4"
+            depths = cfg.depth_swin_block
+        num_heads = tuple(2**i*cfg.num_heads for i in range(0, 4))
+        """
         return cls(
-            img_size=(args.roi_x, args.roi_y, args.roi_z),
-            in_channels=args.in_channels,
-            out_channels=args.out_channels,
-            depths=depths,
-            num_heads=num_heads,
-            feature_size=args.feature_size,
-            drop_rate=args.dropout_rate,
-            attn_drop_rate=args.attn_drop_rate,
-            dropout_path_rate=args.dropout_path_rate,
-            normalize=not args.no_normalize_swin,
-            use_checkpoint=args.use_checkpoint,
-            spatial_dims=args.spatial_dims,
-            downsample=args.downsample,
-            vit_norm_name=vit_norm_name,
-            encoder_norm_name=encoder_norm_name,
-            decoder_norm_name=decoder_norm_name,
-            freeze_encoder=args.freeze_encoder
+            img_size=(cfg.roi_x, cfg.roi_y, cfg.roi_z),
+            in_channels=cfg.in_channels,
+            out_channels=cfg.out_channels,
+            patch_size=cfg.patch_size,
+            depths=cfg.depths,
+            num_heads=cfg.num_heads,
+            window_size=cfg.window_size,
+            qkv_bias=cfg.qkv_bias,
+            mlp_ratio=cfg.mlp_ratio,
+            feature_size=cfg.feature_size,
+            drop_rate=cfg.drop_rate,
+            attn_drop_rate=cfg.attn_drop_rate,
+            dropout_path_rate=cfg.dropout_path_rate,
+            normalize=cfg.normalize,
+            patch_norm=cfg.patch_norm,
+            use_checkpoint=cfg.use_checkpoint,
+            spatial_dims=cfg.spatial_dims,
+            downsample=cfg.downsample,
+            vit_norm=tuple(cfg.vit_norm) if not isinstance(cfg.vit_norm, str) else cfg.vit_norm,
+            dec_norm=tuple(cfg.dec_norm) if not isinstance(cfg.dec_norm, str) else cfg.dec_norm,
+            enc_norm=tuple(cfg.enc_norm) if not isinstance(cfg.enc_norm, str) else cfg.enc_norm,
+            freeze_enc=cfg.freeze_enc,
+            use_v2=cfg.use_v2,
         )
 
     def load_from(self, weights):
+        layers1_0: BasicLayer = self.swinViT.layers1[0]  # type: ignore[assignment]
+        layers2_0: BasicLayer = self.swinViT.layers2[0]  # type: ignore[assignment]
+        layers3_0: BasicLayer = self.swinViT.layers3[0]  # type: ignore[assignment]
+        layers4_0: BasicLayer = self.swinViT.layers4[0]  # type: ignore[assignment]
+        wstate = weights["state_dict"]
 
         with torch.no_grad():
-            self.swinViT.patch_embed.proj.weight.copy_(weights["state_dict"]["module.patch_embed.proj.weight"])
-            self.swinViT.patch_embed.proj.bias.copy_(weights["state_dict"]["module.patch_embed.proj.bias"])
-            for bname, block in self.swinViT.layers1[0].blocks.named_children():
-                block.load_from(weights, n_block=bname, layer="layers1")
-            self.swinViT.layers1[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers1.0.downsample.reduction.weight"]
-            )
-            self.swinViT.layers1[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers1.0.downsample.norm.weight"]
-            )
-            self.swinViT.layers1[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers1.0.downsample.norm.bias"]
-            )
-            for bname, block in self.swinViT.layers2[0].blocks.named_children():
-                block.load_from(weights, n_block=bname, layer="layers2")
-            self.swinViT.layers2[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers2.0.downsample.reduction.weight"]
-            )
-            self.swinViT.layers2[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers2.0.downsample.norm.weight"]
-            )
-            self.swinViT.layers2[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers2.0.downsample.norm.bias"]
-            )
-            for bname, block in self.swinViT.layers3[0].blocks.named_children():
-                block.load_from(weights, n_block=bname, layer="layers3")
-            self.swinViT.layers3[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers3.0.downsample.reduction.weight"]
-            )
-            self.swinViT.layers3[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers3.0.downsample.norm.weight"]
-            )
-            self.swinViT.layers3[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers3.0.downsample.norm.bias"]
-            )
-            for bname, block in self.swinViT.layers4[0].blocks.named_children():
-                block.load_from(weights, n_block=bname, layer="layers4")
-            self.swinViT.layers4[0].downsample.reduction.weight.copy_(
-                weights["state_dict"]["module.layers4.0.downsample.reduction.weight"]
-            )
-            self.swinViT.layers4[0].downsample.norm.weight.copy_(
-                weights["state_dict"]["module.layers4.0.downsample.norm.weight"]
-            )
-            self.swinViT.layers4[0].downsample.norm.bias.copy_(
-                weights["state_dict"]["module.layers4.0.downsample.norm.bias"]
+            self.swinViT.patch_embed.proj.weight.copy_(wstate["module.patch_embed.proj.weight"])
+            self.swinViT.patch_embed.proj.bias.copy_(wstate["module.patch_embed.proj.bias"])
+            for bname, block in layers1_0.blocks.named_children():
+                block.load_from(weights, n_block=bname, layer="layers1")  # type: ignore[operator]
+
+            if layers1_0.downsample is not None:
+                d = layers1_0.downsample
+                d.reduction.weight.copy_(wstate["module.layers1.0.downsample.reduction.weight"])  # type: ignore
+                d.norm.weight.copy_(wstate["module.layers1.0.downsample.norm.weight"])  # type: ignore
+                d.norm.bias.copy_(wstate["module.layers1.0.downsample.norm.bias"])  # type: ignore
+
+            for bname, block in layers2_0.blocks.named_children():
+                block.load_from(weights, n_block=bname, layer="layers2")  # type: ignore[operator]
+
+            if layers2_0.downsample is not None:
+                d = layers2_0.downsample
+                d.reduction.weight.copy_(wstate["module.layers2.0.downsample.reduction.weight"])  # type: ignore
+                d.norm.weight.copy_(wstate["module.layers2.0.downsample.norm.weight"])  # type: ignore
+                d.norm.bias.copy_(wstate["module.layers2.0.downsample.norm.bias"])  # type: ignore
+
+            for bname, block in layers3_0.blocks.named_children():
+                block.load_from(weights, n_block=bname, layer="layers3")  # type: ignore[operator]
+
+            if layers3_0.downsample is not None:
+                d = layers3_0.downsample
+                d.reduction.weight.copy_(wstate["module.layers3.0.downsample.reduction.weight"])  # type: ignore
+                d.norm.weight.copy_(wstate["module.layers3.0.downsample.norm.weight"])  # type: ignore
+                d.norm.bias.copy_(wstate["module.layers3.0.downsample.norm.bias"])  # type: ignore
+
+            for bname, block in layers4_0.blocks.named_children():
+                block.load_from(weights, n_block=bname, layer="layers4")  # type: ignore[operator]
+
+            if layers4_0.downsample is not None:
+                d = layers4_0.downsample
+                d.reduction.weight.copy_(wstate["module.layers4.0.downsample.reduction.weight"])  # type: ignore
+                d.norm.weight.copy_(wstate["module.layers4.0.downsample.norm.weight"])  # type: ignore
+                d.norm.bias.copy_(wstate["module.layers4.0.downsample.norm.bias"])  # type: ignore
+
+    @torch.jit.unused
+    def _check_input_size(self, spatial_shape):
+        img_size = np.array(spatial_shape)
+        remainder = (img_size % np.power(self.patch_size, 5)) > 0
+        if remainder.any():
+            wrong_dims = (np.where(remainder)[0] + 2).tolist()
+            raise ValueError(
+                f"spatial dimensions {wrong_dims} of input image (spatial shape: {spatial_shape})"
+                f" must be divisible by {self.patch_size}**5."
             )
 
     def forward(self, x_in, modalities=None):
+        if not torch.jit.is_scripting() and not torch.jit.is_tracing():
+            self._check_input_size(x_in.shape[2:])
         hidden_states_out = self.swinViT(x_in, self.normalize, modalities)
         enc0 = self.encoder1(x_in, modalities)
         enc1 = self.encoder2(hidden_states_out[0], modalities)

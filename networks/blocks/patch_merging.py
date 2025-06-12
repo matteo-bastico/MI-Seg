@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import itertools
-from typing import Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -25,7 +26,7 @@ class PatchMergingV2(nn.Module):
     https://github.com/microsoft/Swin-Transformer
     """
 
-    def __init__(self, dim: int, norm_type: Union[Tuple, str] = "instance_cond", spatial_dims: int = 3) -> None:
+    def __init__(self, dim: int, norm_name: tuple | str = "instance_cond", spatial_dims: int = 3) -> None:
         """
         Args:
             dim: number of feature channels.
@@ -35,29 +36,29 @@ class PatchMergingV2(nn.Module):
 
         super().__init__()
 
-        self.norm_type = norm_type[0] if isinstance(norm_type, Tuple) else norm_type
+        self.norm_name = norm_name[0] if isinstance(norm_name, tuple) else norm_name
         self.dim = dim
         if spatial_dims == 3:
             # Automatic adding normalized_shape for layer normalization
-            if self.norm_type == "layer":
-                if isinstance(norm_type, Tuple):
-                    norm_type[1]["normalized_shape"] = 8 * dim
+            if self.norm_name == "layer":
+                if isinstance(norm_name, tuple):
+                    norm_name[1]["normalized_shape"] = 8 * dim
                 else:
-                    norm_type = (norm_type, {"normalized_shape": 8 * dim})
+                    norm_name = (norm_name, {"normalized_shape": 8 * dim})
 
             self.reduction = nn.Linear(8 * dim, 2 * dim, bias=False)
-            self.norm = get_norm_layer(name=norm_type, spatial_dims=spatial_dims, channels=8 * dim)
+            self.norm = get_norm_layer(name=norm_name, spatial_dims=spatial_dims, channels=8 * dim)
 
         elif spatial_dims == 2:
             # Automatic adding normalized_shape for layer normalization
-            if self.norm_type == "layer":
-                if isinstance(norm_type, Tuple):
-                    norm_type[1]["normalized_shape"] = 4 * dim
+            if self.norm_name == "layer":
+                if isinstance(norm_name, norm_name):
+                    norm_name[1]["normalized_shape"] = 4 * dim
                 else:
-                    norm_type = (norm_type, {"normalized_shape": 4 * dim})
+                    norm_name = (norm_name, {"normalized_shape": 4 * dim})
 
             self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
-            self.norm = get_norm_layer(name=norm_type, spatial_dims=spatial_dims, channels=4 * dim)
+            self.norm = get_norm_layer(name=norm_name, spatial_dims=spatial_dims, channels=4 * dim)
 
     def forward(self, x, modalities=None):
         x_shape = x.size()

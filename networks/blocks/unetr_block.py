@@ -10,11 +10,14 @@
 # limitations under the License.
 
 
-from typing import Sequence, Tuple, Union
+from __future__ import annotations
+
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
 
+from ..layers.simplelayers import Sequential
 from ..blocks.dynunet_block import UnetBasicBlock, UnetResBlock, get_conv_layer
 
 
@@ -29,9 +32,9 @@ class UnetrUpBlock(nn.Module):
         spatial_dims: int,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[Sequence[int], int],
-        upsample_kernel_size: Union[Sequence[int], int],
-        norm_name: Union[Tuple, str],
+        kernel_size: Sequence[int] | int,
+        upsample_kernel_size: Sequence[int] | int,
+        norm_name: tuple | str,
         res_block: bool = False,
     ) -> None:
         """
@@ -97,10 +100,10 @@ class UnetrPrUpBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         num_layer: int,
-        kernel_size: Union[Sequence[int], int],
-        stride: Union[Sequence[int], int],
-        upsample_kernel_size: Union[Sequence[int], int],
-        norm_name: Union[Tuple, str],
+        kernel_size: Sequence[int] | int,
+        stride: Sequence[int] | int,
+        upsample_kernel_size: Sequence[int] | int,
+        norm_name: tuple | str,
         conv_block: bool = False,
         res_block: bool = False,
     ) -> None:
@@ -121,8 +124,6 @@ class UnetrPrUpBlock(nn.Module):
 
         super().__init__()
 
-        self.conv_block = conv_block
-
         upsample_stride = upsample_kernel_size
         self.transp_conv_init = get_conv_layer(
             spatial_dims,
@@ -137,7 +138,7 @@ class UnetrPrUpBlock(nn.Module):
             if res_block:
                 self.blocks = nn.ModuleList(
                     [
-                        nn.Sequential(
+                        Sequential(
                             get_conv_layer(
                                 spatial_dims,
                                 out_channels,
@@ -162,7 +163,7 @@ class UnetrPrUpBlock(nn.Module):
             else:
                 self.blocks = nn.ModuleList(
                     [
-                        nn.Sequential(
+                        Sequential(
                             get_conv_layer(
                                 spatial_dims,
                                 out_channels,
@@ -203,13 +204,7 @@ class UnetrPrUpBlock(nn.Module):
     def forward(self, x, modalities=None):
         x = self.transp_conv_init(x)
         for blk in self.blocks:
-            if self.conv_block:
-                # Convolution
-                x = blk[0](x)
-                # UnetResBlock or UnetBasicBlock with modalities if instance_cond
-                x = blk[1](x, modalities)
-            else:
-                x = blk(x)
+                x = blk(x, modalities)
         return x
 
 
@@ -224,9 +219,9 @@ class UnetrBasicBlock(nn.Module):
         spatial_dims: int,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[Sequence[int], int],
-        stride: Union[Sequence[int], int],
-        norm_name: Union[Tuple, str],
+        kernel_size: Sequence[int] | int,
+        stride: Sequence[int] | int,
+        norm_name: tuple | str,
         res_block: bool = False,
     ) -> None:
         """

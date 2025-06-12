@@ -1,13 +1,4 @@
-# Copyright (c) MONAI Consortium
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Modified from https://github.com/Project-MONAI/MONAI/blob/dev/monai/networks/nets/unet.py
 
 from __future__ import annotations
 
@@ -17,17 +8,12 @@ from collections.abc import Sequence
 import torch
 import torch.nn as nn
 
-from networks.norms.utils import parse_normalization
 from networks.blocks.convolutions import Convolution, ResidualUnit
 from networks.layers.factories import Act, Norm
-from networks.layers.simplelayers import SkipConnection, SequentialWIthModalities
-from monai.utils import alias, deprecated_arg, export
+from networks.layers.simplelayers import SkipConnection, Sequential
 
 __all__ = ["UNet", "Unet"]
 
-
-@export("monai.networks.nets")
-@alias("Unet")
 class UNet(nn.Module):
     """
     Enhanced version of UNet which has residual units implemented with the ResidualUnit class.
@@ -97,9 +83,6 @@ class UNet(nn.Module):
             strides=(2, 2, 2, 2),
         )
 
-    .. deprecated:: 0.6.0
-        ``dimensions`` is deprecated, use ``spatial_dims`` instead.
-
     Note: The acceptable spatial size of input data depends on the parameters of the network,
         to set appropriate spatial size, please check the tutorial for more details:
         https://github.com/Project-MONAI/tutorials/blob/master/modules/UNet_input_size_constrains.ipynb.
@@ -110,9 +93,6 @@ class UNet(nn.Module):
 
     """
 
-    @deprecated_arg(
-        name="dimensions", new_name="spatial_dims", since="0.6", msg_suffix="Please use `spatial_dims` instead."
-    )
     def __init__(
         self,
         spatial_dims: int,
@@ -124,13 +104,12 @@ class UNet(nn.Module):
         up_kernel_size: Sequence[int] | int = 3,
         num_res_units: int = 0,
         act: tuple | str = Act.PRELU,
-        norm_down: tuple | str = Norm.INSTANCE,
-        norm_up: tuple | str = Norm.INSTANCE,
+        enc_norm: tuple | str = Norm.INSTANCE,
+        dec_norm: tuple | str = Norm.INSTANCE,
         dropout: float = 0.0,
         bias: bool = True,
         adn_ordering: str = "NDA",
-        dimensions: int | None = None,
-        freeze_encoder: bool = False,
+        freeze_enc: bool = False,
     ) -> None:
 
         super().__init__()
@@ -142,14 +121,15 @@ class UNet(nn.Module):
             raise ValueError("the length of `strides` should equal to `len(channels) - 1`.")
         if delta > 0:
             warnings.warn(f"`len(strides) > len(channels) - 1`, the last {delta} values of strides will not be used.")
-        if dimensions is not None:
-            spatial_dims = dimensions
-        if isinstance(kernel_size, Sequence):
-            if len(kernel_size) != spatial_dims:
-                raise ValueError("the length of `kernel_size` should equal to `dimensions`.")
-        if isinstance(up_kernel_size, Sequence):
-            if len(up_kernel_size) != spatial_dims:
-                raise ValueError("the length of `up_kernel_size` should equal to `dimensions`.")
+        if isinstance(kernel_size, Sequence) and len(kernel_size) != spatial_dims:
+            raise ValueError("the length of `kernel_size` should equal to `dimensions`.")
+        if isinstance(up_kernel_size, Sequence) and len(up_kernel_size) != spatial_dims:
+            raise ValueError("the length of `up_kernel_size` should equal to `dimensions`.")
+
+        # TODO: Add implementation for layer norm in ResidualUnit and Convolution
+        if dec_norm == "layer" or enc_norm == "layer":
+            raise ValueError("Layer normalization not yet implemented for encoder and decoder blocks, please "
+                             "select another normalization.")
 
         self.dimensions = spatial_dims
         self.in_channels = in_channels
@@ -160,8 +140,8 @@ class UNet(nn.Module):
         self.up_kernel_size = up_kernel_size
         self.num_res_units = num_res_units
         self.act = act
-        self.norm_down = norm_down
-        self.norm_up = norm_up
+        self.enc_norm = enc_norm
+        self.dec_norm = dec_norm
         self.dropout = dropout
         self.bias = bias
         self.adn_ordering = adn_ordering
@@ -192,47 +172,49 @@ class UNet(nn.Module):
                 # the next layer is the bottom so stop recursion, create the bottom layer as the sublock for this layer
                 subblock = self._get_bottom_layer(c, channels[1])
                 # The last layer is a down_layer, so it belongs to the encoder
-                if freeze_encoder:
+                if freeze_enc:
                     subblock.requires_grad_(False)
                 upc = c + channels[1]
 
             down = self._get_down_layer(inc, c, s, is_top)  # create layer in downsampling path
             up = self._get_up_layer(upc, outc, s, is_top)  # create layer in upsampling path
-            if freeze_encoder:
+            if freeze_enc:
                 down.requires_grad_(False)
             return self._get_connection_block(down, up, subblock)
 
         self.model = _create_block(in_channels, out_channels, self.channels, self.strides, True)
 
     @classmethod
-    def from_argparse_args(cls, args):
+    def from_cfg(cls, cfg):
+        """
         # Set normalizations
-        decoder_norm_name = parse_normalization(args.decoder_norm_name,
-                                                not args.decoder_norm_no_affine,
-                                                args.num_groups,
-                                                args.num_styles)
-        encoder_norm_name = parse_normalization(args.encoder_norm_name,
-                                                not args.encoder_norm_no_affine,
-                                                args.num_groups,
-                                                args.num_styles)
-        # TODO: coorect bug here range(0, args.num_layers) [in the experiments the number is increased by 2]
-        channels = [args.feature_size * 2 ** i for i in range(1, args.num_layers + 1)]
+        dec_norm_name = parse_normalization(cfg.dec_norm_name,
+                                                cfg.dec_norm_affine,
+                                                cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                                cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        enc_norm_name = parse_normalization(cfg.enc_norm_name,
+                                                cfg.enc_norm_affine,
+                                                cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                                cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        # TODO: correct bug here range(0, cfg.num_layers) [in the experiments the number is increased by 2]
+        channels = [cfg.feature_size * 2 ** i for i in range(1, cfg.num_layers + 1)]
+        """
         return cls(
-            spatial_dims=args.spatial_dims,
-            in_channels=args.in_channels,
-            out_channels=args.out_channels,
-            channels=channels,
-            strides=args.strides,
-            kernel_size=args.kernel_size,
-            up_kernel_size=args.up_kernel_size,
-            num_res_units=args.num_res_units,
-            act=args.activation,
-            norm_down=encoder_norm_name,
-            norm_up=decoder_norm_name,
-            dropout=args.dropout_rate,
-            bias=not args.no_bias,
-            adn_ordering=args.adn_ordering,
-            freeze_encoder=args.freeze_encoder
+            spatial_dims=cfg.spatial_dims,
+            in_channels=cfg.in_channels,
+            out_channels=cfg.out_channels,
+            channels=cfg.channels,
+            strides=cfg.strides,
+            kernel_size=cfg.kernel_size,
+            up_kernel_size=cfg.up_kernel_size,
+            num_res_units=cfg.num_res_units,
+            act=cfg.activation,
+            enc_norm=tuple(cfg.enc_norm) if not isinstance(cfg.enc_norm, str) else cfg.enc_norm,
+            dec_norm=tuple(cfg.dec_norm) if not isinstance(cfg.dec_norm, str) else cfg.dec_norm,
+            dropout=cfg.dropout_rate,
+            bias=cfg.bias,
+            adn_ordering=cfg.adn_ordering,
+            freeze_enc=cfg.freeze_enc
         )
 
     def _get_connection_block(self, down_path: nn.Module, up_path: nn.Module, subblock: nn.Module) -> nn.Module:
@@ -246,7 +228,7 @@ class UNet(nn.Module):
             subblock: block defining the next layer in the network.
         Returns: block for this layer: `nn.Sequential(down_path, SkipConnection(subblock), up_path)`
         """
-        return SequentialWIthModalities(down_path, SkipConnection(subblock), up_path)
+        return Sequential(down_path, SkipConnection(subblock), up_path)
 
     def _get_down_layer(self, in_channels: int, out_channels: int, strides: int, is_top: bool) -> nn.Module:
         """
@@ -271,7 +253,7 @@ class UNet(nn.Module):
                 kernel_size=self.kernel_size,
                 subunits=self.num_res_units,
                 act=self.act,
-                norm=self.norm_down,
+                norm=self.enc_norm,
                 dropout=self.dropout,
                 bias=self.bias,
                 adn_ordering=self.adn_ordering,
@@ -284,7 +266,7 @@ class UNet(nn.Module):
             strides=strides,
             kernel_size=self.kernel_size,
             act=self.act,
-            norm=self.norm_down,
+            norm=self.enc_norm,
             dropout=self.dropout,
             bias=self.bias,
             adn_ordering=self.adn_ordering,
@@ -312,7 +294,7 @@ class UNet(nn.Module):
             strides: convolution stride.
             is_top: True if this is the top block.
         """
-        conv: Convolution | SequentialWIthModalities
+        conv: Convolution | Sequential
 
         conv = Convolution(
             self.dimensions,
@@ -321,7 +303,7 @@ class UNet(nn.Module):
             strides=strides,
             kernel_size=self.up_kernel_size,
             act=self.act,
-            norm=self.norm_up,
+            norm=self.dec_norm,
             dropout=self.dropout,
             bias=self.bias,
             conv_only=is_top and self.num_res_units == 0,
@@ -338,13 +320,13 @@ class UNet(nn.Module):
                 kernel_size=self.kernel_size,
                 subunits=1,
                 act=self.act,
-                norm=self.norm_up,
+                norm=self.dec_norm,
                 dropout=self.dropout,
                 bias=self.bias,
                 last_conv_only=is_top,
                 adn_ordering=self.adn_ordering,
             )
-            conv = SequentialWIthModalities(conv, ru)
+            conv = Sequential(conv, ru)
 
         return conv
 

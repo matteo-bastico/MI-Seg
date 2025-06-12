@@ -1,16 +1,21 @@
-from typing import Optional, Sequence, Union, Tuple
+# From https://github.com/Project-MONAI/MONAI/blob/dev/monai/networks/nets/swin_unetr.py
+
+from __future__ import annotations
+
+from collections.abc import Sequence
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from networks.blocks.patch_embedding import PatchEmbed
 from monai.utils import look_up_option, optional_import
 
+from ..blocks.patchembedding import PatchEmbed
 from ..blocks.swin_transformer_block import SwinTransformerBlock
 from ..blocks.patch_merging import PatchMerging, PatchMergingV2
-from networks.utils.swin_utils import get_window_size, compute_mask
+from ..blocks.unetr_block import UnetrBasicBlock
+from ..utils.swin_utils import get_window_size, compute_mask
 
 rearrange, _ = optional_import("einops", name="rearrange")
 
@@ -49,7 +54,8 @@ class SwinTransformer(nn.Module):
         use_checkpoint: bool = False,
         spatial_dims: int = 3,
         downsample="merging",
-        norm_type: Union[Tuple, str] = "layer"
+        norm_name: tuple | str = "layer",
+        use_v2: bool = False,
     ) -> None:
         """
         Args:
@@ -70,6 +76,8 @@ class SwinTransformer(nn.Module):
             downsample: module used for downsampling, available options are `"mergingv2"`, `"merging"` and a
                 user-specified `nn.Module` following the API defined in :py:class:`monai.networks.nets.PatchMerging`.
                 The default is currently `"merging"` (the original version defined in v0.9.0).
+            norm_name: normalization layers type
+            use_v2: using swinunetr_v2, which adds a residual convolution block at the beginning of each swin stage.
         """
 
         super().__init__()
@@ -78,20 +86,26 @@ class SwinTransformer(nn.Module):
         self.patch_norm = patch_norm
         self.window_size = window_size
         self.patch_size = patch_size
-        self.norm_type = norm_type[0] if isinstance(norm_type, Tuple) else norm_type
+        self.norm_name = norm_name[0] if isinstance(norm_name, tuple) else norm_name
         self.patch_embed = PatchEmbed(
             patch_size=self.patch_size,
             in_chans=in_chans,
             embed_dim=embed_dim,
-            norm_type=norm_type if self.patch_norm else None,  # type: ignore
+            norm_name=norm_name if self.patch_norm else None,  # type: ignore
             spatial_dims=spatial_dims,
         )
         self.pos_drop = nn.Dropout(p=drop_rate)
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        self.use_v2 = use_v2
         self.layers1 = nn.ModuleList()
         self.layers2 = nn.ModuleList()
         self.layers3 = nn.ModuleList()
         self.layers4 = nn.ModuleList()
+        if self.use_v2:
+            self.layers1c = nn.ModuleList()
+            self.layers2c = nn.ModuleList()
+            self.layers3c = nn.ModuleList()
+            self.layers4c = nn.ModuleList()
         down_sample_mod = look_up_option(downsample, MERGING_MODE) if isinstance(downsample, str) else downsample
         for i_layer in range(self.num_layers):
             layer = BasicLayer(
@@ -106,7 +120,7 @@ class SwinTransformer(nn.Module):
                 attn_drop=attn_drop_rate,
                 downsample=down_sample_mod,
                 use_checkpoint=use_checkpoint,
-                norm_type=norm_type
+                norm_name=norm_name
             )
             if i_layer == 0:
                 self.layers1.append(layer)
@@ -116,44 +130,64 @@ class SwinTransformer(nn.Module):
                 self.layers3.append(layer)
             elif i_layer == 3:
                 self.layers4.append(layer)
+            if self.use_v2:
+                layerc = UnetrBasicBlock(
+                    spatial_dims=spatial_dims,
+                    in_channels=embed_dim * 2 ** i_layer,
+                    out_channels=embed_dim * 2 ** i_layer,
+                    kernel_size=3,
+                    stride=1,
+                    norm_name=norm_name,
+                    res_block=True,
+                )
+                if i_layer == 0:
+                    self.layers1c.append(layerc)
+                elif i_layer == 1:
+                    self.layers2c.append(layerc)
+                elif i_layer == 2:
+                    self.layers3c.append(layerc)
+                elif i_layer == 3:
+                    self.layers4c.append(layerc)
+
         self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
 
     def proj_out(self, x, normalize=False):
         if normalize:
-            x_shape = x.size()
-            if self.norm_type == "layer":
+            x_shape = x.shape
+            # Force trace() to generate a constant by casting to int
+            ch = int(x_shape[1])
+            if self.norm_name == "layer":
                 if len(x_shape) == 5:
-                    n, ch, d, h, w = x_shape
                     x = rearrange(x, "n c d h w -> n d h w c")
                     x = F.layer_norm(x, [ch])
                     x = rearrange(x, "n d h w c -> n c d h w")
                 elif len(x_shape) == 4:
-                    n, ch, h, w = x_shape
                     x = rearrange(x, "n c h w -> n h w c")
                     x = F.layer_norm(x, [ch])
                     x = rearrange(x, "n h w c -> n c h w")
-            elif self.norm_type == "instance" or self.norm_type == "instance_cond":
+            elif self.norm_name == "instance" or self.norm_name == "instance_cond":
                 x = F.instance_norm(x)
             # TODO: Add implementation for group and batch norm
-            '''
-            elif self.norm_type[0] == "group":
-                x = F.group_norm(x, num_groups=self.norm_type[1]["num_groups"])
-            elif self.norm_type[0] == "batch":
-                # IDK if it is correct to set running mean and var to None (I tried on the notebook and seem fine)
-                x = F.batch_norm(x, None, None, training=True)
-            '''
         return x
 
     def forward(self, x, normalize=True, modalities=None):
         x0 = self.patch_embed(x, modalities)
         x0 = self.pos_drop(x0)
         x0_out = self.proj_out(x0, normalize)
+        if self.use_v2:
+            x0 = self.layers1c[0](x0.contiguous(), modalities=modalities)
         x1 = self.layers1[0](x0.contiguous(), modalities=modalities)
         x1_out = self.proj_out(x1, normalize)
+        if self.use_v2:
+            x1 = self.layers2c[0](x1.contiguous(), modalities=modalities)
         x2 = self.layers2[0](x1.contiguous(), modalities=modalities)
         x2_out = self.proj_out(x2, normalize)
+        if self.use_v2:
+            x2 = self.layers3c[0](x2.contiguous(), modalities=modalities)
         x3 = self.layers3[0](x2.contiguous(), modalities=modalities)
         x3_out = self.proj_out(x3, normalize)
+        if self.use_v2:
+            x3 = self.layers4c[0](x3.contiguous(), modalities=modalities)
         x4 = self.layers4[0](x3.contiguous(), modalities=modalities)
         x4_out = self.proj_out(x4, normalize)
         return [x0_out, x1_out, x2_out, x3_out, x4_out]
@@ -178,9 +212,9 @@ class BasicLayer(nn.Module):
         qkv_bias: bool = False,
         drop: float = 0.0,
         attn_drop: float = 0.0,
-        downsample: Optional[nn.Module] = None,
+        downsample: nn.Module | None = None,
         use_checkpoint: bool = False,
-        norm_type: Union[Tuple, str] = "layer"
+        norm_name: tuple | str = "layer"
     ) -> None:
         """
         Args:
@@ -195,6 +229,7 @@ class BasicLayer(nn.Module):
             attn_drop: attention dropout rate.
             downsample: an optional downsampling layer at the end of the layer.
             use_checkpoint: use gradient checkpointing for reduced memory usage.
+            norm_name: normalization layers type, available options are `"layer"`, `"instance"`, `"instance_cond"`,
         """
 
         super().__init__()
@@ -216,14 +251,14 @@ class BasicLayer(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                     use_checkpoint=use_checkpoint,
-                    norm_type=norm_type
+                    norm_name=norm_name
                 )
                 for i in range(depth)
             ]
         )
         self.downsample = downsample
         if callable(self.downsample):
-            self.downsample = downsample(dim=dim, norm_type=norm_type, spatial_dims=len(self.window_size))
+            self.downsample = downsample(dim=dim, norm_name=norm_name, spatial_dims=len(self.window_size))
 
     def forward(self, x, modalities=None):
         x_shape = x.size()

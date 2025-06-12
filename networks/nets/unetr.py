@@ -1,21 +1,13 @@
-# Copyright (c) MONAI Consortium
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# From https://github.com/Project-MONAI/MONAI/blob/dev/monai/networks/nets/unetr.py
 
-from typing import Sequence, Tuple, Union
+from __future__ import annotations
+
+from collections.abc import Sequence
 
 import torch.nn as nn
 
 from monai.utils import ensure_tuple_rep
 
-from networks.norms.utils import parse_normalization
 from ..blocks.dynunet_block import UnetOutBlock
 from ..blocks.unetr_block import UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
 from ..nets.vit import ViT
@@ -28,54 +20,57 @@ class UNETR(nn.Module):
     """
 
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            img_size: Union[Sequence[int], int],
-            feature_size: int = 16,
-            hidden_size: int = 768,
-            mlp_dim: int = 3072,
-            num_heads: int = 12,
-            pos_embed: str = "conv",
-            conv_block: bool = True,
-            res_block: bool = True,
-            dropout_rate: float = 0.0,
-            spatial_dims: int = 3,
-            qkv_bias: bool = False,
-            vit_norm_name: Union[Tuple, str] = "layer",
-            decoder_norm_name: Union[Tuple, str] = "instance",
-            encoder_norm_name: Union[Tuple, str] = "instance",
-            freeze_encoder: bool = False
+        self,
+        in_channels: int,
+        out_channels: int,
+        img_size: Sequence[int] | int,
+        feature_size: int = 16,
+        hidden_size: int = 768,
+        mlp_dim: int = 3072,
+        num_heads: int = 12,
+        proj_type: str = "conv",
+        conv_block: bool = True,
+        res_block: bool = True,
+        dropout_rate: float = 0.0,
+        spatial_dims: int = 3,
+        qkv_bias: bool = False,
+        save_attn: bool = False,
+        vit_norm: tuple | str = "layer",
+        dec_norm: tuple | str = "instance",
+        enc_norm: tuple | str = "instance",
+        freeze_enc: bool = False
     ) -> None:
         """
         Args:
             in_channels: dimension of input channels.
             out_channels: dimension of output channels.
             img_size: dimension of input image.
-            feature_size: dimension of network feature size.
-            hidden_size: dimension of hidden layer.
-            mlp_dim: dimension of feedforward layer.
-            num_heads: number of attention heads.
-            pos_embed: position embedding layer type.
-            conv_block: bool argument to determine if convolutional block is used.
-            res_block: bool argument to determine if residual block is used.
-            dropout_rate: faction of the input units to drop.
-            spatial_dims: number of spatial dims.
-            qkv_bias: apply the bias term for the qkv linear layer in self attention block
-            vit_norm_name: feature normalization type and arguments for ViT
-            decoder_norm_name: feature normalization type and arguments for decoder layers
-            encoder_norm_name: feature normalization type and arguments for encoder layers
+            feature_size: dimension of network feature size. Defaults to 16.
+            hidden_size: dimension of hidden layer. Defaults to 768.
+            mlp_dim: dimension of feedforward layer. Defaults to 3072.
+            num_heads: number of attention heads. Defaults to 12.
+            proj_type: patch embedding layer type. Defaults to "conv".
+            norm_name: feature normalization type and arguments. Defaults to "instance".
+            conv_block: if convolutional block is used. Defaults to True.
+            res_block: if residual block is used. Defaults to True.
+            dropout_rate: fraction of the input units to drop. Defaults to 0.0.
+            spatial_dims: number of spatial dims. Defaults to 3.
+            qkv_bias: apply the bias term for the qkv linear layer in self attention block. Defaults to False.
+            save_attn: to make accessible the attention in self attention block. Defaults to False.
+            vit_norm: feature normalization type and arguments for ViT
+            dec_norm: feature normalization type and arguments for decoder layers
+            enc_norm: feature normalization type and arguments for encoder layers
 
         Examples::
 
-            # for single channel input 4-channel output with image size of (96,96,96), feature size of 32 and batch norms
-            >>> net = UNETR(in_channels=1, out_channels=4, img_size=(96,96,96), feature_size=32, decoder_norm_name='batch')
+            # for single channel input 4-channel output with image size of (96,96,96), feature size of 32 and batch norm
+            >>> net = UNETR(in_channels=1, out_channels=4, img_size=(96,96,96), feature_size=32, dec_norm='batch')
 
-             # for single channel input 4-channel output with image size of (96,96), feature size of 32 and batch norms
-            >>> net = UNETR(in_channels=1, out_channels=4, img_size=96, feature_size=32, decoder_norm_name='batch', spatial_dims=2)
+             # for single channel input 4-channel output with image size of (96,96), feature size of 32 and batch norm
+            >>> net = UNETR(in_channels=1, out_channels=4, img_size=96, feature_size=32, dec_norm='batch', spatial_dims=2)
 
-            # for 4-channel input 3-channel output with image size of (128,128,128), conv position embedding and instance norms
-            >>> net = UNETR(in_channels=4, out_channels=3, img_size=(128,128,128), pos_embed='conv', decoder_norm_name='instance')
+            # for 4-channel input 3-channel output with image size of (128,128,128), conv position embedding and instance norm
+            >>> net = UNETR(in_channels=4, out_channels=3, img_size=(128,128,128), proj_type='conv', dec_norm='instance')
 
         """
 
@@ -93,13 +88,13 @@ class UNETR(nn.Module):
         self.feat_size = tuple(img_d // p_d for img_d, p_d in zip(img_size, self.patch_size))
         self.hidden_size = hidden_size
         self.classification = False
-        # If Tuple is (norm_type, args1, arg2, ...) else norm_type
-        self.vit_norm_name = vit_norm_name[0] if isinstance(vit_norm_name, Tuple) else vit_norm_name
-        self.decoder_norm_name = decoder_norm_name[0] if isinstance(decoder_norm_name, Tuple) else decoder_norm_name
-        self.encoder_norm_name = encoder_norm_name[0] if isinstance(encoder_norm_name, Tuple) else encoder_norm_name
+
+        self.vit_norm = vit_norm[0] if isinstance(vit_norm, tuple) else vit_norm
+        self.dec_norm = dec_norm[0] if isinstance(dec_norm, tuple) else dec_norm
+        self.enc_norm = enc_norm[0] if isinstance(enc_norm, tuple) else enc_norm
 
         # TODO: Add implementation for layer norm in Unetr Blocks
-        if self.decoder_norm_name == "layer" or self.encoder_norm_name == "layer":
+        if self.dec_norm == "layer" or self.enc_norm == "layer":
             raise ValueError("Layer normalization not yet implemented for encoder and decoder blocks, please "
                              "select another normalization.")
 
@@ -111,12 +106,13 @@ class UNETR(nn.Module):
             mlp_dim=mlp_dim,
             num_layers=self.num_layers,
             num_heads=num_heads,
-            pos_embed=pos_embed,
+            proj_type=proj_type,
             classification=self.classification,
             dropout_rate=dropout_rate,
             spatial_dims=spatial_dims,
             qkv_bias=qkv_bias,
-            norm_type=vit_norm_name
+            save_attn=save_attn,
+            norm_name=vit_norm
         )
         self.encoder1 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
@@ -124,7 +120,7 @@ class UNETR(nn.Module):
             out_channels=feature_size,
             kernel_size=3,
             stride=1,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             res_block=res_block,
         )
         self.encoder2 = UnetrPrUpBlock(
@@ -135,7 +131,7 @@ class UNETR(nn.Module):
             kernel_size=3,
             stride=1,
             upsample_kernel_size=2,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             conv_block=conv_block,
             res_block=res_block,
         )
@@ -147,7 +143,7 @@ class UNETR(nn.Module):
             kernel_size=3,
             stride=1,
             upsample_kernel_size=2,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             conv_block=conv_block,
             res_block=res_block,
         )
@@ -159,7 +155,7 @@ class UNETR(nn.Module):
             kernel_size=3,
             stride=1,
             upsample_kernel_size=2,
-            norm_name=encoder_norm_name,
+            norm_name=enc_norm,
             conv_block=conv_block,
             res_block=res_block,
         )
@@ -169,7 +165,7 @@ class UNETR(nn.Module):
             out_channels=feature_size * 8,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=res_block,
         )
         self.decoder4 = UnetrUpBlock(
@@ -178,7 +174,7 @@ class UNETR(nn.Module):
             out_channels=feature_size * 4,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=res_block,
         )
         self.decoder3 = UnetrUpBlock(
@@ -187,7 +183,7 @@ class UNETR(nn.Module):
             out_channels=feature_size * 2,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=res_block,
         )
         self.decoder2 = UnetrUpBlock(
@@ -196,53 +192,55 @@ class UNETR(nn.Module):
             out_channels=feature_size,
             kernel_size=3,
             upsample_kernel_size=2,
-            norm_name=decoder_norm_name,
+            norm_name=dec_norm,
             res_block=res_block,
         )
         self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
         self.proj_axes = (0, spatial_dims + 1) + tuple(d + 1 for d in range(spatial_dims))
         self.proj_view_shape = list(self.feat_size) + [self.hidden_size]
-        # Freeze Encoder
-        if freeze_encoder:
+        # Freeze enc
+        if freeze_enc:
             self.vit.requires_grad_(False)
-            self.encoder1.requires_grad_(False)
-            self.encoder2.requires_grad_(False)
-            self.encoder3.requires_grad_(False)
-            self.encoder4.requires_grad_(False)
+            self.enc1.requires_grad_(False)
+            self.enc2.requires_grad_(False)
+            self.enc3.requires_grad_(False)
+            self.enc4.requires_grad_(False)
 
     @classmethod
-    def from_argparse_args(cls, args):
+    def from_cfg(cls, cfg):
+        """
         # Set normalizations
-        vit_norm_name = parse_normalization(args.vit_norm_name,
-                                            not args.vit_norm_no_affine,
-                                            args.num_groups,
-                                            args.num_styles)
-        decoder_norm_name = parse_normalization(args.decoder_norm_name,
-                                                not args.decoder_norm_no_affine,
-                                                args.num_groups,
-                                                args.num_styles)
-        encoder_norm_name = parse_normalization(args.encoder_norm_name,
-                                                not args.encoder_norm_no_affine,
-                                                args.num_groups,
-                                                args.num_styles)
+        vit_norm = parse_normalization(cfg.vit_norm,
+                                            cfg.vit_norm_affine,
+                                            cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                            cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        dec_norm = parse_normalization(cfg.dec_norm,
+                                                cfg.dec_norm_affine,
+                                                cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                                cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        enc_norm = parse_normalization(cfg.enc_norm,
+                                                cfg.enc_norm_affine,
+                                                cfg.num_groups if hasattr(cfg, "num_groups") else None,
+                                                cfg.num_styles if hasattr(cfg, "num_styles") else None)
+        """
         return cls(
-            in_channels=args.in_channels,
-            out_channels=args.out_channels,
-            img_size=(args.roi_x, args.roi_y, args.roi_z),
-            feature_size=args.feature_size,
-            hidden_size=args.hidden_size,
-            mlp_dim=args.mlp_dim,
-            num_heads=args.num_heads,
-            pos_embed=args.pos_embed,
-            conv_block=not args.no_conv_block,
-            res_block=not args.no_res_block,
-            dropout_rate=args.dropout_rate,
-            spatial_dims=args.spatial_dims,
-            qkv_bias=args.qkv_bias,
-            vit_norm_name=vit_norm_name,
-            decoder_norm_name=decoder_norm_name,
-            encoder_norm_name=encoder_norm_name,
-            freeze_encoder=args.freeze_encoder
+            in_channels=cfg.in_channels,
+            out_channels=cfg.out_channels,
+            img_size=(cfg.roi_x, cfg.roi_y, cfg.roi_z),
+            feature_size=cfg.feature_size,
+            hidden_size=cfg.hidden_size,
+            mlp_dim=cfg.mlp_dim,
+            num_heads=cfg.num_heads,
+            proj_type=cfg.proj_type,
+            conv_block=cfg.conv_block,
+            res_block=cfg.res_block,
+            dropout_rate=cfg.dropout_rate,
+            spatial_dims=cfg.spatial_dims,
+            qkv_bias=cfg.qkv_bias,
+            vit_norm=tuple(cfg.vit_norm) if not isinstance(cfg.vit_norm, str) else cfg.vit_norm,
+            dec_norm=tuple(cfg.dec_norm) if not isinstance(cfg.dec_norm, str) else cfg.dec_norm,
+            enc_norm=tuple(cfg.enc_norm) if not isinstance(cfg.enc_norm, str) else cfg.enc_norm,
+            freeze_enc=cfg.freeze_enc
         )
 
     def proj_feat(self, x):
@@ -255,10 +253,10 @@ class UNETR(nn.Module):
                 x_in,
                 modalities=None):
         # TODO: switch double input with single *data and upack it
-        if (self.vit_norm_name == "instance_cond" or
-            self.encoder_norm_name == "instance_cond" or
-            self.decoder_norm_name == "instance_cond") and modalities is None:
-            raise ValueError("Modalities must be passed to the forward step when encoder_norm_type is 'instance_cond'.")
+        if (self.vit_norm == "instance_cond" or
+            self.enc_norm == "instance_cond" or
+            self.dec_norm == "instance_cond") and modalities is None:
+            raise ValueError("Modalities must be passed to the forward step when norm_name is 'instance_cond'.")
 
         x, hidden_states_out = self.vit(x_in, modalities)
         enc1 = self.encoder1(x_in, modalities)

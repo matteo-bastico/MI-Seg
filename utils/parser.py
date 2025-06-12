@@ -2,6 +2,69 @@ from typing import Union
 from argparse import ArgumentParser
 
 
+def add_trainer_argparse_args(parser: ArgumentParser):
+    group = parser.add_argument_group("monai.trainer", description="Arguments related to MONAI Trainer configuration")
+
+    group.add_argument("--accelerator", type=str, default="auto", help="Type of accelerator to use. Default: 'auto'.")
+    group.add_argument("--strategy", type=str, default="auto",
+                       help="Strategy for distributed training. Default: 'auto'.")
+    group.add_argument("--devices", type=str, default="auto", help="Number or selection of devices. Default: 'auto'.")
+    group.add_argument("--num_nodes", type=int, default=1, help="Number of nodes for distributed training. Default: 1.")
+    group.add_argument("--precision", type=str, default=None,
+                       help="Precision of training (e.g., '16', 'bf16'). Default: None.")
+    group.add_argument("--fast_dev_run", type=int, default=0,
+                       help="Number of batches to run for debugging. Default: 0.")
+    group.add_argument("--max_epochs", type=int, default=None, help="Max number of epochs for training. Default: None.")
+    group.add_argument("--min_epochs", type=int, default=None, help="Min number of epochs for training. Default: None.")
+    group.add_argument("--max_steps", type=int, default=-1, help="Max number of training steps. Default: -1.")
+    group.add_argument("--min_steps", type=int, default=None, help="Min number of training steps. Default: None.")
+    group.add_argument("--max_time", type=str, default=None, help="Max training duration. Default: None.")
+    group.add_argument("--limit_train_batches", type=float, default=None,
+                       help="Limit number of training batches. Default: None.")
+    group.add_argument("--limit_val_batches", type=float, default=None,
+                       help="Limit number of validation batches. Default: None.")
+    group.add_argument("--limit_test_batches", type=float, default=None,
+                       help="Limit number of test batches. Default: None.")
+    group.add_argument("--limit_predict_batches", type=float, default=None,
+                       help="Limit number of prediction batches. Default: None.")
+    group.add_argument("--overfit_batches", type=float, default=0.0,
+                       help="Fraction of batches to overfit. Default: 0.0.")
+    group.add_argument("--val_check_interval", type=float, default=None,
+                       help="Validation check interval. Default: None.")
+    group.add_argument("--check_val_every_n_epoch", type=int, default=1,
+                       help="Run validation every n epochs. Default: 1.")
+    group.add_argument("--num_sanity_val_steps", type=int, default=None,
+                       help="Sanity check validation steps. Default: None.")
+    group.add_argument("--log_every_n_steps", type=int, default=None, help="Logging frequency. Default: None.")
+    group.add_argument("--enable_checkpointing", action="store_true", default=True,
+                       help="Enable checkpointing. Default: True.")
+    group.add_argument("--enable_progress_bar", action="store_true", help="Enable progress bar. Default: False.")
+    group.add_argument("--enable_model_summary", action="store_true", help="Enable model summary. Default: False.")
+    group.add_argument("--accumulate_grad_batches", type=int, default=1,
+                       help="Accumulate gradients for batches. Default: 1.")
+    group.add_argument("--gradient_clip_val", type=float, default=None, help="Gradient clipping value. Default: None.")
+    group.add_argument("--gradient_clip_algorithm", type=str, default=None,
+                       help="Gradient clipping algorithm. Default: None.")
+    group.add_argument("--deterministic", type=str, default=None,
+                       help="Enable deterministic operations. Default: None.")
+    group.add_argument("--benchmark", action="store_true", help="Enable benchmark mode for GPUs. Default: False.")
+    group.add_argument("--inference_mode", action="store_true",
+                       help="Use inference mode for evaluation. Default: True.")
+    group.add_argument("--use_distributed_sampler", action="store_true", help="Use distributed sampler. Default: True.")
+    group.add_argument("--profiler", type=str, default=None, help="Profiler for monitoring performance. Default: None.")
+    group.add_argument("--detect_anomaly", action="store_true",
+                       help="Enable anomaly detection for debugging. Default: False.")
+    group.add_argument("--barebones", action="store_true", help="Set up Trainer with barebones mode. Default: False.")
+    group.add_argument("--sync_batchnorm", action="store_true",
+                       help="Synchronize batchnorm across devices. Default: False.")
+    group.add_argument("--reload_dataloaders_every_n_epochs", type=int, default=0,
+                       help="Reload dataloaders every n epochs. Default: 0.")
+    group.add_argument("--default_root_dir", type=str, default=None,
+                       help="Default root directory for outputs. Default: None.")
+
+    return parser
+
+
 def add_model_argparse_args(parser: ArgumentParser):
     group = parser.add_argument_group("monai.net")
     # Common args
@@ -17,7 +80,8 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--hidden_size", default=768, type=int, help="hidden size dimention in ViT encoder")
     group.add_argument("--mlp_dim", default=3072, type=int, help="mlp dimention in ViT encoder")
     group.add_argument("--num_heads", default=12, type=int, help="number of attention heads in ViT encoder")
-    group.add_argument("--pos_embed", default="perceptron", type=str, help="type of position embedding")
+    group.add_argument("--proj_type", default="perceptron", type=str, help="patch embedding layer type")
+    group.add_argument("--pos_embed_type", default="learnable", type=str, help="position embedding type")
     group.add_argument("--no_conv_block", action="store_true", help="convolutional block is not used in Unet blocks")
     group.add_argument("--no_res_block", action="store_true", help="residual block is not used in Unet blocks")
     group.add_argument("--dropout_rate", default=0.0, type=float, help="dropout rate")
@@ -26,12 +90,12 @@ def add_model_argparse_args(parser: ArgumentParser):
                         help="bias term for the qkv linear layer in self attention block")
     group.add_argument("--vit_norm_name", type=str, default="layer", help="Normalization type in ViT blocks")
     group.add_argument("--vit_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
-    group.add_argument("--encoder_norm_name", type=str, default="instance",
+    group.add_argument("--enc_norm_name", type=str, default="instance",
                         help="Normalization type in encoder blocks")
-    group.add_argument("--encoder_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
-    group.add_argument("--decoder_norm_name", type=str, default="instance",
+    group.add_argument("--enc_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
+    group.add_argument("--dec_norm_name", type=str, default="instance",
                         help="Normalization type in decoder blocks")
-    group.add_argument("--decoder_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
+    group.add_argument("--dec_norm_no_affine", action="store_true", help="Not affine parameters in ViT norm")
     group.add_argument("--num_groups", type=int, default=4, help="For group norm")
     group.add_argument("--num_styles", type=int, default=2, help="For instance_cond norm")
     # Swin-UNETR exclusive args
@@ -44,6 +108,11 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--no_normalize_swin", action="store_true", help="not use normalization in swin transformer"
                                                                         "projections")
     group.add_argument("--pre_swin", type=str, default="", help="Path for pretrained Swin-UNETR")
+    group.add_argument("--patch_size", default=2, type=int, help="Size of the patch token.")
+    group.add_argument("--window_size", default=7, type=int, nargs='+', help="Size of the window.")
+    group.add_argument("--mlp_ratio", default=4.0, type=float, help="ratio of mlp hidden dim to embedding dim")
+    group.add_argument("--patch_norm", action="store_true", help="Whether to add norm after patch embedding.")
+    group.add_argument("--use_v2", action="store_true", help="Whether to use v2 of swin transformer.")
     # Unet specific parameters
     group.add_argument("--num_layers", type=int, default=4, help="UNet number of layers")
     group.add_argument('--strides', default=[2, 2, 2], nargs='+',
@@ -59,7 +128,7 @@ def add_model_argparse_args(parser: ArgumentParser):
     group.add_argument("--no_bias", action="store_true", help="Not use bias in UNet")
     group.add_argument('--adn_ordering', default="NDA",
                        help='Order of activation, dropout and normalization in UNet', type=str)
-    group.add_argument('--freeze_encoder', action="store_true",
+    group.add_argument('--freeze_enc', action="store_true",
                        help='Train only the decoder of the model (assume that a pretrained model is given')
     # Loss,
     group = parser.add_argument_group("loss")
@@ -147,4 +216,42 @@ def add_tune_argparse_args(parser: ArgumentParser):
     group.add_argument("--storage_name", default="MI-Seg", type=str, help="name for optuna storage")
     group.add_argument("--min_lr", default=1e-5, type=float, help="minimum learning rate for tuning")
     group.add_argument("--max_lr", default=5e-3, type=float, help="maximum learning rate for tuning")
+    return parser
+
+
+def add_train_argparse_args(parser: ArgumentParser):
+    group = parser.add_argument_group("train")
+    group.add_argument("--no_amp", action="store_true", help="not use AMP on single training")
+    group.add_argument("--default_root_dir", default="./experiments", type=str, help="not use GPU on single training")
+    group.add_argument("--study_name", default="experiment", type=str, help="optuna study name")
+    group.add_argument("--trial_name", default="dev", type=str, help="experiment trial name")
+    group.add_argument("--epochs", default=1, type=int, help="number of epochs")
+    group.add_argument("--iters_to_accumulate", default=1, type=int, help="not use GPU on single training")
+    group.add_argument("--check_val_every_n_epoch", default=1, type=int, help="check validation every n epochs")
+    group.add_argument(
+        "--num-gpus", type=int, default=1, help="number of gpus *per machine*"
+    )
+    group.add_argument(
+        "--num-machines", type=int, default=1, help="total number of machines"
+    )
+    group.add_argument(
+        "--machine-rank",
+        type=int,
+        default=0,
+        help="the rank of this machine (unique per machine)",
+    )
+    # PyTorch still may leave orphan processes in multi-gpu training.
+    # Therefore we use a deterministic way to obtain port,
+    # so that users are aware of orphan processes by seeing the port occupied.
+    # port = 2 ** 15 + 2 ** 14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2 ** 14
+    group.add_argument(
+        "--dist-url",
+        # default="tcp://127.0.0.1:{}".format(port),
+        default="auto",
+        help="initialization URL for pytorch distributed backend. See "
+             "https://pytorch.org/docs/stable/distributed.html for details.",
+    )
+    group.add_argument('--classes', nargs='+',
+                       help='segmentation classes', type=str)
+    group.add_argument("--modalities", nargs='+', help="modalities names")
     return parser
